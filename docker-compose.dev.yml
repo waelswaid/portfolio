@@ -1,0 +1,9 @@
+services:
+  auth-service:
+    environment:
+      ENVIRONMENT: development
+      APP_BASE_URL: http://localhost
+      PASSWORD_RESET_URL: http://localhost/reset-password
+      EMAIL_VERIFY_URL: http://localhost/verify-email
+      INVITE_URL: http://localhost/accept-invite
+
