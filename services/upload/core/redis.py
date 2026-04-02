@@ -42,7 +42,7 @@ async def rate_limit_by_size(sender_email:str, file_size: int)->None:
      result = int(await size_rate_limit_script(keys=[redis_key], args=[settings.UPLOAD_LIMIT_TTL, file_size, settings.SIZE_RATE_LIMIT]))
      if result == 1:
          raise HTTPException(status_code=429, detail="too many uploads, try again later")
-     
+
 
 async def rate_limit(sender_email:str, file:UploadFile, file_size:int) -> None:
     is_audio = file.content_type and file.content_type.startswith("audio/")
@@ -51,4 +51,3 @@ async def rate_limit(sender_email:str, file:UploadFile, file_size:int) -> None:
     else:
         await rate_limit_by_size(sender_email, file_size)
     return
-

@@ -55,17 +55,31 @@ services:
     environment:
       - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
       - CHAT_DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/chat
-      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  upload:
+    build: ./services/upload
+    restart: unless-stopped
+    expose:
+      - "8003"
+    environment:
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
+      - REDIS_URL=redis://redis:6379/2
       - S3_BUCKET_NAME=s3-bucket-waelswaid
       - AWS_REGION=us-east-1
       - CDN_DOMAIN=cdn.waelswaid.com
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
       interval: 10s
       timeout: 5s
       retries: 3

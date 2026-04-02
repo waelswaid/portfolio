@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
 
-class Upload(BaseModel):
+class FileMessage(BaseModel):
     to: str
-    url:str
+    url: str

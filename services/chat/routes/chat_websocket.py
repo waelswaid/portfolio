@@ -4,7 +4,7 @@ from connection_manager import manager
 
 logger = logging.getLogger(__name__)
 from schemas.message import Message, LoadHistory
-from schemas.upload_schema import Upload
+from schemas.file_message import FileMessage
 from core.auth_token import validate_token
 from services.friend_service import friend_request_handler
 from services.user_db_service import upsert_user
@@ -36,7 +36,7 @@ async def request_filter(data, msg_type:str, user_id:str, user_email, websocket:
     elif msg_type == "file_upload":
         # frontend sends --> {"type":"upload_file", "to":"to_id", "url":"url"}
         try:
-            file_received = Upload(**data)
+            file_received = FileMessage(**data)
         except ValidationError:
             await websocket.send_json({"type": "message_error", "message": "invalid payload"})
             return

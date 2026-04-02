@@ -6,7 +6,7 @@ from core.config import settings
 
 MAX_SIZE = 10 * 1024 * 1024  # 10mb
 # MIME types (Multipurpose Internet Mail Extensions) a standard format for identifying file types over HTTP
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "video/mp4", "application/pdf", 
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "video/mp4", "application/pdf",
                  "audio/webm", "audio/mp4", "audio/mpeg"}
 
 s3 = boto3.client("s3", region_name=settings.AWS_REGION)
@@ -18,7 +18,7 @@ async def upload_file(sender_id: str, file: UploadFile, contents: bytes):
     base_type = file.content_type.split(";")[0].strip() if file.content_type else ""
     if base_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="invalid file type")
-    
+
     if len(contents) > MAX_SIZE:
         raise HTTPException(status_code=400, detail="file too big")
 
