@@ -9,7 +9,8 @@ from core.auth_token import validate_token
 from services.friend_service import friend_request_handler
 from services.user_db_service import upsert_user
 from database import async_session
-from services.chat_service import chat_handler, load_chat, chat_list
+from services.chat_service import ensure_chat_exists, load_chat, chat_list
+from kafka.producer import producer
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import ValidationError
 
@@ -28,7 +29,8 @@ async def request_filter(data, msg_type:str, user_id:str, user_email, websocket:
             return
         message, message_to = message_model.message, message_model.to
         try:
-            await chat_handler(msg_type, message, user_id, message_to)
+            chat_id = await ensure_chat_exists(user_id, message_to)
+            await producer.produce(msg_type, message, user_id, message_to, chat_id)
             await manager.send_personal_message(msg_type, message_to, message, user_id)
         except SQLAlchemyError:
             await websocket.send_json({"type": "message_error", "message": "failed to send"})
@@ -42,7 +44,8 @@ async def request_filter(data, msg_type:str, user_id:str, user_email, websocket:
             return
         file_to, file_url = file_received.to, file_received.url
         try:
-            await chat_handler(msg_type, file_url, user_id, file_to)
+            chat_id = await ensure_chat_exists(user_id, file_to)
+            await producer.produce(msg_type, file_url, user_id, file_to, chat_id)
             await manager.send_personal_message(msg_type, file_to, file_url, user_id)
         except SQLAlchemyError:
             await websocket.send_json({"type": "message_error", "message": "failed to send"})

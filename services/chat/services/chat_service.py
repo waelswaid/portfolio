@@ -15,13 +15,35 @@ from sqlalchemy.exc import SQLAlchemyError
 def generate_dm_key(sender_id:str, receiver_id:str):
     return min(sender_id, receiver_id) + ":" + max(sender_id, receiver_id)
 
-
-async def chat_handler(msg_type:str, message:str,  sender_id:str, receiver_id:str):
+# sync chat/member creation before produce
+async def ensure_chat_exists(sender_id: str, receiver_id: str) -> str:
+    """ensures chat exists between two users. returns the chat_id"""
     dm_key = generate_dm_key(sender_id, receiver_id)
     async with async_session() as session:
         try:
             chat_id = await query_chats_for_existing_chat(session, dm_key)
-            # no chat_id means no existing chat between two users
+            if not chat_id:
+                chat_id = str(uuid.uuid4())
+                chat = Chat(chat_id=chat_id, chat_name=None, is_group=False, dm_key=dm_key)
+                member1 = ChatMember(chat_id=chat_id, user_id=sender_id, is_admin=False)
+                member2 = ChatMember(chat_id=chat_id, user_id=receiver_id, is_admin=False)
+                await insert_new_chat(session, chat)
+                await session.flush()
+                await insert_users_to_chat_members(session, member1, member2)
+                await session.commit()
+            return chat_id
+        except SQLAlchemyError as e:
+            logger.error(f"ensure_chat_exists failed: {e}")
+            await session.rollback()
+            raise
+
+
+async def chat_handler(msg_type:str, message:str,  sender_id:str, receiver_id:str):
+   # insert a message into an existing chat. Used as Kafka producer fallback
+    dm_key = generate_dm_key(sender_id, receiver_id)
+    async with async_session() as session:
+        try:
+            chat_id = await query_chats_for_existing_chat(session, dm_key)
             if not chat_id:
                 chat_id = str(uuid.uuid4())
                 chat = Chat(chat_id=chat_id, chat_name=None, is_group=False, dm_key=dm_key)
