@@ -82,7 +82,7 @@ def init_observability(service_name: str, service_version: str = "0.1.0", engine
 
     # auto-instrument FastAPI
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    FastAPIInstrumentor.instrument()
+    FastAPIInstrumentor().instrument()
 
     # auto-instrument SQLAlchemy if engine provided
     if engine is not None:
