@@ -139,7 +139,7 @@ services:
       - "4318"
       - "8889"
     healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:13133/"]
+      test: ["CMD", "curl", "-sf", "http://localhost:13133/"]
       interval: 10s
       timeout: 5s
       retries: 5
