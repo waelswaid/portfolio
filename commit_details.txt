@@ -1,98 +1,145 @@
-Extract shared library (E3, E4, C3)
-------------------------------------
-auth_token.py was duplicated across chat/ and upload/. JWT algorithm hardcoded.
+add full OpenTelemetry observability stack (traces, metrics, structured logs)
 
-Created services/shared/ with parameterized auth.py and BaseServiceSettings config.
-Both services now inherit shared config and delegate token validation to shared/auth.py.
-JWT_ALGORITHMS is configurable via env var (defaults to ["RS256"]).
-Docker build context widened to ./services so both images can COPY shared/.
+all telemetry flows through an OTel Collector to dedicated backends:
+  services --> OTLP gRPC --> OTel Collector --> Tempo (traces)
+                                            --> Prometheus (metrics)
+                                            --> Loki (logs)
+                                            --> Grafana (dashboards, localhost:3000)
 
-Fix fragile DB URL replacement (C6)
-------------------------------------
-.replace("postgresql://", "postgresql+asyncpg://") breaks on postgres:// shorthand.
-Replaced with SQLAlchemy's make_url() parser to handle all driver name variants.
+=== new files ===
 
-Registry-based message dispatch (E1, E2)
------------------------------------------
-Problem: all incoming WebSocket messages flowed through two chained if/elif blocks.
-request_filter in chat_websocket.py handled message, file_upload, load_history, chat_list
-and fell through to friend_request_handler in friend_service.py which handled the remaining
-6 friend types. adding a new message type meant modifying one of these functions. both had
-different error handling patterns and parameter signatures.
+observability/otel-collector-config.yaml
+  - receives OTLP on gRPC :4317 and HTTP :4318
+  - batch processor (5s timeout, 1024 batch size)
+  - exports traces to Tempo, metrics to Prometheus scrape endpoint (:8889), logs to Loki
+  - health_check extension on :13133
 
-Created dispatch/ package with three components:
-  - dispatch/registry.py: a dict mapping msg_type -> async handler function. @handles("type")
-    decorator registers a handler. get_handler("type") looks it up.
-  - dispatch/context.py: RequestContext dataclass bundling user_id, user_email, websocket, data
-    replacing the inconsistent positional params across the two old dispatchers.
-  - dispatch/handlers/chat_handlers.py: 4 handlers extracted from request_filter — message,
-    file_upload, load_history, chat_list. each validates its own schema and calls the
-    appropriate service function.
-  - dispatch/handlers/friend_handlers.py: 6 handlers extracted from friend_request_handler —
-    friend_request, friend_accept, friend_decline, friend_remove, friend_list, pending_list.
-    each validates its own schema with per-handler ValidationError catching.
+observability/prometheus.yml
+  - scrapes otel-collector:8889 every 15s
 
-Replaced request_filter in chat_websocket.py with a 5-line dispatch: get_handler(msg_type),
-build RequestContext, call handler. unknown types return {"type":"error","message":"unknown type"}.
-Removed friend_request_handler from friend_service.py entirely.
-Handler modules are imported in main.py so decorators execute at startup.
+observability/tempo.yaml
+  - local trace storage at /var/tempo/traces with WAL
 
-Files created: dispatch/__init__.py, dispatch/registry.py, dispatch/context.py,
-  dispatch/handlers/__init__.py, dispatch/handlers/chat_handlers.py,
-  dispatch/handlers/friend_handlers.py
-Files modified: routes/chat_websocket.py, services/friend_service.py, main.py
+observability/loki.yaml
+  - local log storage, tsdb store, v13 schema
+  - structured metadata enabled (needed for OTel log attributes)
 
-Decouple friend service from WebSocket (E5)
---------------------------------------------
-Problem: every function in friend_service.py (send_friend_request, friend_request_accept,
-friend_request_declined, friend_remove, return_friend_list, return_pending_list) took a
-WebSocket parameter and called websocket.send_json() directly for both the caller response
-and peer notifications. the service layer also imported connection_manager to look up
-other users' websockets. this made it impossible to reuse the friend logic from an HTTP
-endpoint or test without a real/mocked WebSocket.
+observability/grafana/provisioning/datasources/datasources.yaml
+  - auto-provisions Prometheus, Tempo, Loki datasources with explicit UIDs
+  - Tempo linked to Prometheus (trace-to-metrics) and Loki (trace-to-logs)
+  - Loki derives traceID field linking back to Tempo (log-to-trace correlation)
+  - anonymous admin access enabled for dev convenience
 
-Removed all WebSocket and connection_manager imports from friend_service.py. changed all 6
-function signatures to take plain data params (strings) instead of schema objects + WebSocket.
-each function now returns a dict with two keys:
-  - "response": the JSON payload to send back to the caller
-  - "notify": list of (target_user_id, payload) tuples for peer notifications
-error paths return only "response" with no "notify" key.
+services/shared/observability.py
+  - init_observability(service_name, engine=None): single entry point for all OTel setup
+  - creates TracerProvider, MeterProvider, LoggerProvider with OTLP gRPC exporters
+  - JSON log formatter on stdout with trace_id/span_id injected into every log line
+  - logs also sent to collector via OTLP LoggingHandler (dual output: stdout + collector)
+  - auto-instruments FastAPI (always), SQLAlchemy (if engine provided),
+    botocore and redis (if installed, silently skipped otherwise)
+  - shutdown_observability(): flushes and shuts down all three providers
 
-Transport logic moved to dispatch/handlers/friend_handlers.py. added _send_result(ctx, result)
-helper that sends result["response"] to ctx.websocket and iterates result.get("notify", [])
-to deliver notifications via manager.get_connection(). each handler validates the schema,
-extracts plain params, calls the service function, and passes the result to _send_result.
+services/shared/metrics.py
+  - custom metric definitions on a shared meter ("portfolio.custom")
+  - chat: ws_active_connections (UpDownCounter), ws_messages_total,
+    kafka_messages_produced, kafka_messages_consumed, kafka_consumer_errors
+  - upload: upload_requests_total, upload_bytes_total, rate_limit_hits
 
-Files modified: services/friend_service.py, dispatch/handlers/friend_handlers.py
+services/shared/tracing.py
+  - KafkaHeaderCarrier: adapts Kafka headers (list of (key, bytes) tuples)
+    to the OTel TextMap propagator interface (get/set/keys)
+  - inject_trace_context(): serializes current span context into Kafka headers
+    for the producer side
+  - extract_trace_context(): deserializes trace context from Kafka headers
+    on the consumer side, returns an OTel Context
+  - ws_span(): async context manager for manual WebSocket span creation
+    (FastAPI auto-instrumentation does not cover WebSocket endpoints)
+    marks span as ERROR and records exception on failure, then re-raises
 
-Split send_message and fix consumer circular import (E6, E7)
--------------------------------------------------------------
-Problem E6: send_message in chat_service.py mixed three concerns in one function —
-ensure_chat_exists (DB), producer.produce (Kafka) with chat_handler fallback (DB), and
-manager.send_personal_message (WebSocket delivery). adding a new delivery channel or
-changing persistence strategy meant modifying this function. chat_service.py imported
-kafka.producer and connection_manager, coupling the service layer to infrastructure.
+services/shared/health.py
+  - check_postgres(engine): runs SELECT 1 via async engine
+  - check_redis(redis_url): creates temporary async redis connection, PINGs
+  - check_kafka(bootstrap_servers): connects a temporary AIOKafkaProducer (3s timeout)
+  - build_health_response(checks): returns dict with "ok" or "degraded" status
+    always returns 200 (not 503) to avoid Docker healthcheck restart loops
+    when a dependency is temporarily unreachable
 
-Problem E7: kafka/consumer.py did an inline import at line 53-54
-(from services.chat_service import chat_handler) inside _handle_message to avoid a
-circular dependency — consumer imports chat_service which imports producer which is
-in the same kafka/ package. the consumer's only job is to persist messages to DB, it
-should not depend on the service layer.
+=== modified files ===
 
-Replaced send_message and chat_handler with persist_message(msg_type, message, sender_id,
-chat_id) in chat_service.py. persist_message only does the DB insert — opens a session,
-creates a Message ORM object, inserts and commits. chat_service.py no longer imports
-kafka.producer or connection_manager. it only depends on database, repository, and models.
+services/shared/config.py
+  - added OTEL_SERVICE_NAME and OTEL_EXPORTER_OTLP_ENDPOINT to BaseServiceSettings
+  - read automatically from environment via pydantic-settings
 
-Moved orchestration to _send_message in dispatch/handlers/chat_handlers.py which now owns
-the full flow: ensure_chat_exists → producer.produce (with persist_message as fallback) →
-manager.send_personal_message. the handler module imports producer and manager since that's
-the transport/infrastructure layer where they belong.
+docker-compose.yml
+  - added OTEL_SERVICE_NAME and OTEL_EXPORTER_OTLP_ENDPOINT env vars to chat and upload
+  - added depends_on otel-collector for both services
+  - added 5 new containers:
+    otel-collector (otel/opentelemetry-collector-contrib:0.120.0)
+    prometheus (prom/prometheus:latest)
+    tempo (grafana/tempo:latest)
+    loki (grafana/loki:3.4.2)
+    grafana (grafana/grafana:latest, exposed on :3000)
+  - added volumes: prometheus-data, tempo-data, loki-data, grafana-data
 
-Consumer now imports persist_message directly at module level — no inline import, no
-circular dependency. consumer also no longer passes receiver_id since persist_message
-only needs sender_id and chat_id for the insert (the old chat_handler accepted receiver_id
-only to potentially re-run ensure_chat_exists, which was redundant since the producer
-already guaranteed the chat exists before producing).
+services/chat/requirements.txt
+  - added: opentelemetry-api, opentelemetry-sdk, opentelemetry-exporter-otlp,
+    opentelemetry-instrumentation-fastapi, opentelemetry-instrumentation-sqlalchemy,
+    opentelemetry-instrumentation-logging
 
-Files modified: services/chat_service.py, dispatch/handlers/chat_handlers.py, kafka/consumer.py
+services/upload/requirements.txt
+  - added: opentelemetry-api, opentelemetry-sdk, opentelemetry-exporter-otlp,
+    opentelemetry-instrumentation-fastapi, opentelemetry-instrumentation-redis,
+    opentelemetry-instrumentation-botocore, opentelemetry-instrumentation-logging
+
+services/upload/main.py
+  - calls init_observability("upload") before FastAPI() creation
+  - added lifespan with shutdown_observability() on teardown
+  - replaced bare {"status": "ok"} health check with check_redis dependency check
+
+services/upload/upload_route.py
+  - records upload_requests_total (with content_type attribute) and
+    upload_bytes_total after successful uploads only
+
+services/upload/core/redis.py
+  - records rate_limit_hits (with limiter attribute: "count" or "size")
+    before raising 429 HTTPException
+
+services/chat/main.py
+  - calls init_observability("chat", engine=engine) before FastAPI() creation
+    this auto-instruments SQLAlchemy via engine.sync_engine
+  - shutdown_observability() called after engine.dispose() in lifespan teardown
+  - replaced bare health check with check_postgres + check_kafka dependency checks
+
+services/chat/connection_manager.py
+  - ws_active_connections.add(1) on fresh connection (not on reconnect or tab replace)
+  - ws_active_connections.add(-1) on grace period expiry (full disconnect)
+
+services/chat/routes/chat_websocket.py
+  - each handler invocation wrapped in ws_span("ws.handle") with
+    ws.message_type and user.id attributes
+  - ws_messages_total incremented after successful handler execution only
+  - on handler failure: span is marked ERROR by ws_span, exception logged,
+    counter not incremented
+
+services/chat/kafka/producer.py
+  - creates "kafka.produce chat-messages" span (SpanKind.PRODUCER) around send
+  - sets messaging.system and messaging.destination attributes
+  - injects trace context into Kafka message headers via inject_trace_context()
+  - increments kafka_messages_produced after send
+
+services/chat/kafka/consumer.py
+  - extracts trace context from Kafka message headers via extract_trace_context()
+  - attaches extracted context so consumer span becomes child of producer span
+  - creates "kafka.consume chat-messages" span (SpanKind.CONSUMER)
+  - context detached in finally block
+  - _handle_message now returns bool (True=success, False=dropped)
+  - span marked ERROR when message is dropped after max retries
+  - kafka_messages_consumed incremented for all consumed messages
+  - kafka_consumer_errors incremented only on max retry exhaustion
+
+=== end-to-end trace path for a chat message ===
+
+ws.handle "message" (WebSocket span, manual)
+  --> kafka.produce "chat-messages" (producer span, manual, injects headers)
+    --> kafka.consume "chat-messages" (consumer span, manual, extracts headers)
+      --> INSERT INTO messages (SQLAlchemy span, auto-instrumented)

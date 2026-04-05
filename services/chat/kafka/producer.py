@@ -1,8 +1,11 @@
 import json
 import logging
 from aiokafka import AIOKafkaProducer
+from opentelemetry import trace
 from core.config import settings
 from schemas.chat_event import ChatMessageEvent
+from shared.tracing import inject_trace_context
+from shared.metrics import kafka_messages_produced
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,13 @@ class ChatProducer:
             msg_type=msg_type, message=message,
             sender_id=sender_id, receiver_id=receiver_id, chat_id=chat_id,
         )
-        await self._producer.send_and_wait("chat-messages", value=event.model_dump(), key=chat_id)
+        tracer = trace.get_tracer(__name__)
+        with tracer.start_as_current_span("kafka.produce chat-messages", kind=trace.SpanKind.PRODUCER) as span:
+            span.set_attribute("messaging.system", "kafka")
+            span.set_attribute("messaging.destination", "chat-messages")
+            headers = inject_trace_context()
+            await self._producer.send_and_wait("chat-messages", value=event.model_dump(), key=chat_id, headers=headers)
+        kafka_messages_produced.add(1)
 
 # async producer singleton
 producer = ChatProducer()

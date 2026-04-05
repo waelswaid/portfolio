@@ -1,0 +1,53 @@
+import contextlib
+from opentelemetry import trace, context
+from opentelemetry.propagate import get_global_textmap
+
+
+class KafkaHeaderCarrier:
+    """Adapts Kafka headers (list of (key, bytes) tuples) to the OTel propagator interface."""
+
+    def __init__(self, headers=None):
+        self._headers = list(headers) if headers else []
+
+    def get(self, key):
+        for k, v in self._headers:
+            if k == key:
+                return v.decode() if isinstance(v, bytes) else v
+        return None
+
+    def set(self, key, value):
+        self._headers = [(k, v) for k, v in self._headers if k != key]
+        self._headers.append((key, value.encode() if isinstance(value, str) else value))
+
+    def keys(self):
+        return [k for k, _ in self._headers]
+
+    @property
+    def headers(self):
+        return self._headers
+
+
+def inject_trace_context() -> list[tuple[str, bytes]]:
+    """Inject current trace context into Kafka headers for the producer side."""
+    carrier = KafkaHeaderCarrier()
+    get_global_textmap().inject(carrier=carrier)
+    return carrier.headers
+
+
+def extract_trace_context(headers) -> context.Context:
+    """Extract trace context from Kafka message headers on the consumer side."""
+    carrier = KafkaHeaderCarrier(headers or [])
+    return get_global_textmap().extract(carrier=carrier)
+
+
+@contextlib.asynccontextmanager
+async def ws_span(name: str, attributes: dict | None = None):
+    """Create a traced span for WebSocket operations (not auto-instrumented by OTel)."""
+    tracer = trace.get_tracer(__name__)
+    with tracer.start_as_current_span(name, kind=trace.SpanKind.SERVER, attributes=attributes or {}) as span:
+        try:
+            yield span
+        except Exception as exc:
+            span.set_status(trace.StatusCode.ERROR, str(exc))
+            span.record_exception(exc)
+            raise

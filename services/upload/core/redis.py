@@ -1,6 +1,7 @@
 import redis.asyncio as redis
 from core.config import settings
 from fastapi import UploadFile, HTTPException
+from shared.metrics import rate_limit_hits
 
 # parses the url (host="redis", port=6379, db=1)
 redis_client = redis.from_url(settings.REDIS_URL)
@@ -34,6 +35,7 @@ async def rate_limit_by_num(sender_email: str) -> None:
     redis_key = f"rate:num:{sender_email}"
     count = int(await rate_limit_script(keys=[redis_key], args=[settings.UPLOAD_LIMIT_TTL]))
     if count > settings.UPLOAD_RATE_LIMIT:
+        rate_limit_hits.add(1, {"limiter": "count"})
         raise HTTPException(status_code=429, detail="too many uploads, try again later")
 
 
@@ -41,6 +43,7 @@ async def rate_limit_by_size(sender_email:str, file_size: int)->None:
      redis_key = f"rate:size:{sender_email}"
      result = int(await size_rate_limit_script(keys=[redis_key], args=[settings.UPLOAD_LIMIT_TTL, file_size, settings.SIZE_RATE_LIMIT]))
      if result == 1:
+         rate_limit_hits.add(1, {"limiter": "size"})
          raise HTTPException(status_code=429, detail="too many uploads, try again later")
 
 

@@ -5,10 +5,13 @@ from database import engine
 from connection_manager import manager
 from kafka.producer import producer
 from kafka.consumer import consumer
+from shared.observability import init_observability, shutdown_observability
+from shared.health import check_postgres, check_kafka, build_health_response
+from core.config import settings
 import dispatch.handlers.chat_handlers  # noqa: F401 — register handlers
 import dispatch.handlers.friend_handlers  # noqa: F401 — register handlers
 
-
+init_observability("chat", engine=engine)
 
 
 @asynccontextmanager
@@ -21,15 +24,18 @@ async def lifespan(app: FastAPI):
     consumer.stop()
     await producer.stop()
     await engine.dispose()
+    shutdown_observability()
 
 
-app = FastAPI(lifespan = lifespan)
-
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    checks = {}
+    checks.update(await check_postgres(engine))
+    checks.update(await check_kafka(settings.KAFKA_BOOTSTRAP_SERVERS))
+    return build_health_response(checks)
 
 
 app.include_router(websocket_router, prefix="/server")

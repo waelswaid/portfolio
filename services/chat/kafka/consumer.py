@@ -2,9 +2,12 @@ import asyncio
 import json
 import logging
 from aiokafka import AIOKafkaConsumer
+from opentelemetry import trace, context
 from core.config import settings
 from schemas.chat_event import ChatMessageEvent
 from services.chat_service import persist_message
+from shared.tracing import extract_trace_context
+from shared.metrics import kafka_messages_consumed, kafka_consumer_errors
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,19 @@ class ChatConsumer:
                 try:
                     async for msg in self._consumer:
                         if msg.value is not None:
-                            await self._handle_message(msg.value)
+                            ctx = extract_trace_context(msg.headers)
+                            token = context.attach(ctx)
+                            try:
+                                tracer = trace.get_tracer(__name__)
+                                with tracer.start_as_current_span("kafka.consume chat-messages", kind=trace.SpanKind.CONSUMER) as span:
+                                    span.set_attribute("messaging.system", "kafka")
+                                    span.set_attribute("messaging.destination", "chat-messages")
+                                    success = await self._handle_message(msg.value)
+                                    if not success:
+                                        span.set_status(trace.StatusCode.ERROR, "max retries exhausted")
+                                kafka_messages_consumed.add(1)
+                            finally:
+                                context.detach(token)
                         await self._consumer.commit()
                 finally:
                     await self._consumer.stop()
@@ -51,7 +66,7 @@ class ChatConsumer:
                 logger.exception("Kafka consumer loop crashed, restarting in 5s")
                 await asyncio.sleep(5)
 
-    async def _handle_message(self, payload: dict):
+    async def _handle_message(self, payload: dict) -> bool:
         event = ChatMessageEvent(**payload)
         for attempt in range(MAX_RETRIES):
             try:
@@ -59,7 +74,7 @@ class ChatConsumer:
                     event.msg_type, event.message,
                     event.sender_id, event.chat_id,
                 )
-                return
+                return True
             except Exception:
                 logger.warning(
                     "consume handler failed (attempt %d/%d)", attempt + 1, MAX_RETRIES, exc_info=True
@@ -67,7 +82,9 @@ class ChatConsumer:
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAYS[attempt])
 
+        kafka_consumer_errors.add(1)
         logger.error("Max retries exhausted, message dropped: %s", payload)
+        return False
 
 
 consumer = ChatConsumer()

@@ -1,0 +1,116 @@
+WebSocket 403 Debugging Session — 2026-04-05/06
+=================================================
+
+SYMPTOM
+-------
+After pushing two commits (58d868b, 48745c2) and deploying:
+- Auth, login, frontend all work fine
+- Every WebSocket connection to /server/ws/ returns HTTP 403
+- Frontend shows "disconnected" because ws.onclose fires immediately
+- Exponential backoff retries keep failing with the same 403
+
+WHAT WE RULED OUT
+-----------------
+
+1. Code logic is correct
+   - The dispatch refactoring, shared config extraction, service decoupling
+     all look properly implemented. No import errors, no circular deps.
+   - The committed code (HEAD = 48745c2) has no observability imports;
+     those are local uncommitted changes and irrelevant.
+
+2. JWT_PUBLIC_KEY is correct
+   - Both auth and chat containers have the same public key value
+   - Key length 450, has real newlines, starts with -----BEGIN PUBLIC KEY-----
+   - PyJWT successfully parses and loads the key: alg.prepare_key(key) -> OK
+   - JWT_ALGORITHMS is ["RS256"] as expected
+
+3. Token signatures are valid
+   - Tested with jwt.decode(..., options={"verify_exp": False})
+   - Result: "Signature VALID - token is just expired" (for old tokens from logs)
+   - Fresh tokens also get 403 (tested by logging in from a different browser)
+
+4. Route IS registered
+   - `from main import app; for r in app.routes: print(...)` shows:
+     APIWebSocketRoute /server/ws/
+   - The route path matches the request path
+
+5. Not a proxy/nginx issue
+   - Tested direct connection inside the container bypassing nginx:
+     websockets.connect("ws://localhost:8002/server/ws/?token=FRESH_TOKEN")
+   - Still returns HTTP 403
+   - So Cloudflare and nginx are not the problem
+
+6. Not a stale token issue
+   - Logged in fresh from a different browser
+   - Fresh token (iat just seconds old) still gets 403
+
+7. Container is running and healthy
+   - docker compose ps shows chat Up 2+ hours (healthy)
+   - Health endpoint (/health) returns {"status": "ok"}
+   - HTTP works fine; only WebSocket is broken
+
+WHAT WE KNOW
+-------------
+- The 403 comes from uvicorn/starlette BEFORE the app code runs
+  (or possibly from the app closing before accept, but the token
+  signature verified correctly so validate_token should succeed)
+- The route is registered as APIWebSocketRoute /server/ws/
+- HTTP endpoints work (health check passes)
+- Only WebSocket connections fail
+- Versions: uvicorn==0.42.0, websockets==16.0, python:3.14-slim, fastapi==0.135.2
+
+LEADING THEORY
+--------------
+uvicorn 0.42.0 + websockets 16.0 incompatibility at the WebSocket
+protocol/handshake level. The websockets library v16 had major API
+changes from earlier versions. If uvicorn's WebSocket protocol handler
+isn't compatible with websockets 16.0's server API, it would reject
+all WebSocket upgrades at the HTTP level (403) while HTTP endpoints
+continue working normally.
+
+NEXT STEP TO CONFIRM
+--------------------
+Run a minimal FastAPI WebSocket app on a different port inside the
+container using the same uvicorn + websockets versions. If the minimal
+app also fails, it confirms the library incompatibility. Fix would be
+to pin websockets to a version compatible with uvicorn 0.42.0
+(e.g., websockets==14.2 or websockets==15.0).
+
+Test script (copy into container, then run):
+
+    import asyncio, threading, time
+
+    def server():
+        import uvicorn
+        from fastapi import FastAPI, WebSocket
+        app = FastAPI()
+        @app.websocket("/ws")
+        async def ws(websocket: WebSocket):
+            await websocket.accept()
+            await websocket.send_json({"hello": "world"})
+            await websocket.close()
+        uvicorn.run(app, host="0.0.0.0", port=9999, log_level="error")
+
+    t = threading.Thread(target=server, daemon=True)
+    t.start()
+    time.sleep(2)
+
+    import websockets
+    async def test():
+        try:
+            async with websockets.connect("ws://localhost:9999/ws") as ws:
+                msg = await ws.recv()
+                print(f"SUCCESS: {msg}")
+        except Exception as e:
+            print(f"FAILED: {type(e).__name__}: {e}")
+
+    asyncio.run(test())
+
+If SUCCESS: uvicorn+websockets combo works, issue is in the chat app code.
+If FAILED:  uvicorn+websockets 16.0 incompatibility confirmed.
+
+ALTERNATIVE FIX TO TRY
+-----------------------
+If the minimal test also fails, change requirements.txt:
+    websockets==16.0  -->  websockets==14.2
+Then rebuild: docker compose up --build -d

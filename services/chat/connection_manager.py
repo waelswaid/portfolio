@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from fastapi import WebSocket
+from shared.metrics import ws_active_connections
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class ConnectionManager:
 
         # fresh connection
         self.active_connections[user_id] = {"websocket": websocket, "email": user_email}
+        ws_active_connections.add(1)
         return False
 
     async def disconnect(self, user_id: str, websocket: WebSocket):
@@ -78,6 +80,7 @@ class ConnectionManager:
             email = self.active_connections[user_id]["email"]
             del self.active_connections[user_id]
             del self.pending_disconnects[user_id]
+            ws_active_connections.add(-1)
             await self.broadcast({"type": "user_left", "user_id": user_id, "email": email})
         except asyncio.CancelledError:
             # user reconnected in time — do nothing

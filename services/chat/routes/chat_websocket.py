@@ -3,6 +3,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from connection_manager import manager
 from dispatch.registry import get_handler
 from dispatch.context import RequestContext
+from shared.tracing import ws_span
+from shared.metrics import ws_messages_total
 
 logger = logging.getLogger(__name__)
 from core.auth_token import validate_token
@@ -80,7 +82,9 @@ async def route_to_server(websocket: WebSocket):
 
             ctx = RequestContext(user_id=user_id, user_email=user_email, websocket=websocket, data=data)
             try:
-                await handler(ctx)
+                async with ws_span("ws.handle", {"ws.message_type": msg_type, "user.id": user_id}):
+                    await handler(ctx)
+                ws_messages_total.add(1, {"message_type": msg_type})
             except Exception:
                 logger.exception("handler '%s' failed for user %s", msg_type, user_id)
                 try:
