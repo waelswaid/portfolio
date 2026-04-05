@@ -3,10 +3,6 @@ import json
 import logging
 from aiokafka import AIOKafkaConsumer
 from core.config import settings
-from database import async_session
-from models.messages import Message
-from repository.chat_repo import insert_message
-from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +50,19 @@ class ChatConsumer:
                 await asyncio.sleep(5)
 
     async def _handle_message(self, payload: dict):
+        from services.chat_service import chat_handler
+        from schemas.chat_event import ChatMessageEvent
+        event = ChatMessageEvent(**payload)
         for attempt in range(MAX_RETRIES):
             try:
-                async with async_session() as session:
-                    message_orm = Message(
-                        chat_id=payload["chat_id"],
-                        user_id=payload["sender_id"],
-                        message=payload["message"],
-                        type=payload["msg_type"],
-                    )
-                    await insert_message(session, message_orm)
-                    await session.commit()
+                await chat_handler(
+                    event.msg_type, event.message,
+                    event.sender_id, event.receiver_id, event.chat_id,
+                )
                 return
-            except SQLAlchemyError:
+            except Exception:
                 logger.warning(
-                    "DB insert failed (attempt %d/%d)", attempt + 1, MAX_RETRIES, exc_info=True
+                    "consume handler failed (attempt %d/%d)", attempt + 1, MAX_RETRIES, exc_info=True
                 )
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAYS[attempt])

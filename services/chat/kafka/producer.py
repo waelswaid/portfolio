@@ -2,6 +2,7 @@ import json
 import logging
 from aiokafka import AIOKafkaProducer
 from core.config import settings
+from schemas.chat_event import ChatMessageEvent
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +28,11 @@ class ChatProducer:
     async def produce(self, msg_type: str, message: str, sender_id: str, receiver_id: str, chat_id: str):
         if self._producer is None:
             raise RuntimeError("Kafka producer not started")
-        payload = {
-            "msg_type": msg_type,
-            "message": message,
-            "sender_id": sender_id,
-            "receiver_id": receiver_id,
-            "chat_id": chat_id,
-        }
-        try:
-            # pub to topic and wait for result
-            await self._producer.send_and_wait("chat-messages", value=payload, key=chat_id)
-        except Exception:
-            logger.warning("Kafka produce failed, falling back to direct DB write", exc_info=True)
-            from services.chat_service import chat_handler
-            await chat_handler(msg_type, message, sender_id, receiver_id)
+        event = ChatMessageEvent(
+            msg_type=msg_type, message=message,
+            sender_id=sender_id, receiver_id=receiver_id, chat_id=chat_id,
+        )
+        await self._producer.send_and_wait("chat-messages", value=event.model_dump(), key=chat_id)
 
 # async producer singleton
 producer = ChatProducer()

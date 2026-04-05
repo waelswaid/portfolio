@@ -9,7 +9,6 @@ async def send_friend_req_to_db(session, to:str, user_id: str) -> None:
         receiver_id = to
     )
     session.add(request)
-    await session.commit()    
     return
 
 # delete from PendingRequests, insert into Friendships (single transaction)
@@ -27,7 +26,6 @@ async def friend_request_accept_to_db(session, requester_id:str, accepter_id:str
         Friendships(user_id=accepter_id, friend_id=requester_id),
         Friendships(user_id = requester_id, friend_id=accepter_id)
     ])
-    await session.commit()
     return
         
 
@@ -40,7 +38,6 @@ async def friend_req_decline_to_db(session, requester_id: str, decliner_id:str) 
     )
     if result.rowcount == 0:
         raise ValueError("no pending request found")
-    await session.commit()
     return
 
 async def friend_remove_from_db(session, removed_id: str, remover_id:str) -> None:
@@ -55,7 +52,6 @@ async def friend_remove_from_db(session, removed_id: str, remover_id:str) -> Non
     )
     if result.rowcount == 0:
         raise ValueError("not friends")
-    await session.commit()
     return
 
 # TODO only returns user_id, it should return email aswell

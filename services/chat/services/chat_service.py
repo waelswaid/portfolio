@@ -38,22 +38,26 @@ async def ensure_chat_exists(sender_id: str, receiver_id: str) -> str:
             raise
 
 
-async def chat_handler(msg_type:str, message:str,  sender_id:str, receiver_id:str):
-   # insert a message into an existing chat. Used as Kafka producer fallback
-    dm_key = generate_dm_key(sender_id, receiver_id)
+async def send_message(msg_type: str, message: str, sender_id: str, receiver_id: str):
+    """Orchestrates message sending: ensure chat exists, produce to Kafka, deliver to recipient."""
+    from kafka.producer import producer
+    from connection_manager import manager
+    chat_id = await ensure_chat_exists(sender_id, receiver_id)
+    try:
+        await producer.produce(msg_type, message, sender_id, receiver_id, chat_id)
+    except Exception:
+        logger.warning("Kafka produce failed, falling back to direct DB write", exc_info=True)
+        await chat_handler(msg_type, message, sender_id, receiver_id, chat_id)
+    await manager.send_personal_message(msg_type, receiver_id, message, sender_id)
+
+
+async def chat_handler(msg_type:str, message:str,  sender_id:str, receiver_id:str, chat_id: str | None = None):
+   # insert a message into an existing chat. Used by Kafka consumer and as producer fallback
+    if not chat_id:
+        chat_id = await ensure_chat_exists(sender_id, receiver_id)
     async with async_session() as session:
         try:
-            chat_id = await query_chats_for_existing_chat(session, dm_key)
-            if not chat_id:
-                chat_id = str(uuid.uuid4())
-                chat = Chat(chat_id=chat_id, chat_name=None, is_group=False, dm_key=dm_key)
-                member1 = ChatMember(chat_id = chat_id, user_id = sender_id, is_admin=False)
-                member2 = ChatMember(chat_id = chat_id, user_id = receiver_id, is_admin=False)
-                await insert_new_chat(session, chat)
-                await session.flush()
-                await insert_users_to_chat_members(session, member1, member2)
-
-            message_orm = Message(chat_id=chat_id, user_id = sender_id, message = message, type=msg_type)
+            message_orm = Message(chat_id=chat_id, user_id=sender_id, message=message, type=msg_type)
             await insert_message(session, message_orm)
             await session.commit()
         except SQLAlchemyError as e:

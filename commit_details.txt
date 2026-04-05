@@ -1,0 +1,69 @@
+Issue 1: Deduplicate chat_handler / ensure_chat_exists
+-------------------------------------------------------
+chat_handler duplicated the entire chat-creation block from ensure_chat_exists.
+Refactored chat_handler to call ensure_chat_exists, then only handle message insertion.
+
+File: services/chat/services/chat_service.py
+
+Issue 2: Move message orchestration from route to service layer
+---------------------------------------------------------------
+request_filter in chat_websocket.py was directly orchestrating ensure_chat_exists,
+producer.produce, and manager.send_personal_message inline for both "message" and
+"file_upload" branches. This mixed routing with business logic.
+
+Added send_message() to chat_service.py that owns the ensure -> produce -> send flow.
+Both branches in the route now call send_message() instead of orchestrating 3 calls inline.
+Removed producer and ensure_chat_exists imports from chat_websocket.py.
+
+Files: services/chat/services/chat_service.py, services/chat/routes/chat_websocket.py
+
+Issue 3: Make repo commit ownership consistent
+----------------------------------------------
+friend_system_repo.py committed inside repo functions while chat_repo.py left commits
+to the caller. Mixed ownership made transaction boundaries unclear.
+
+Removed session.commit() from all 4 write functions in friend_system_repo.py
+(send_friend_req_to_db, friend_request_accept_to_db, friend_req_decline_to_db,
+friend_remove_from_db). Added session.commit() in friend_service.py after each
+repo call instead. Now all repos follow the same pattern: caller owns the transaction.
+
+Files: services/chat/repository/friend_system_repo.py, services/chat/services/friend_service.py
+
+Kafka A: Consumer calls service layer instead of repo directly
+--------------------------------------------------------------
+Consumer was bypassing the service layer — directly importing Message ORM, insert_message,
+and managing its own session/commit. Duplicate persistence logic that would drift from
+chat_handler over time.
+
+Replaced _handle_message body with a call to chat_handler. Removed direct imports of
+async_session, Message, insert_message, SQLAlchemyError. Retry loop with exponential
+backoff preserved around the chat_handler call.
+
+File: services/chat/kafka/consumer.py
+
+Kafka B: Move fallback logic from producer to service layer
+-----------------------------------------------------------
+Producer was catching Kafka failures and falling back to a direct DB write via chat_handler.
+This made an infrastructure component aware of business logic. Also, send_personal_message
+in send_message() would not run if producer.produce raised before the fallback caught it
+internally.
+
+Made producer pure infrastructure — send_and_wait raises on failure, no fallback, no
+service imports. Moved fallback try/except into send_message() in chat_service.py.
+send_personal_message now runs after the try/except block, so WebSocket delivery happens
+regardless of which persistence path was taken.
+
+Files: services/chat/kafka/producer.py, services/chat/services/chat_service.py
+
+Kafka C: Shared event schema and pass chat_id through consumer path
+-------------------------------------------------------------------
+Consumer was calling chat_handler without chat_id, causing a redundant ensure_chat_exists
+SELECT on every consumed message even though the chat is guaranteed to exist. The Kafka
+payload was also an unvalidated raw dict on both sides.
+
+Added ChatMessageEvent Pydantic model in schemas/chat_event.py. Producer validates and
+serializes through it, consumer deserializes and validates with it. chat_handler now
+accepts optional chat_id — consumer and send_message fallback both pass it, skipping
+the redundant query. ensure_chat_exists only runs when chat_id is unknown.
+
+Files: schemas/chat_event.py (new), kafka/producer.py, kafka/consumer.py, services/chat_service.py

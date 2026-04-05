@@ -19,6 +19,7 @@ async def send_friend_request(req : FriendRequest, websocket:WebSocket, user_id:
     async with async_session() as session:
         try:
             await send_friend_req_to_db(session,to,sender_id)
+            await session.commit()
         except IntegrityError:
             await session.rollback()
             await websocket.send_json({"type":"send_friend_req_error", "message":"invalid request"})
@@ -40,6 +41,7 @@ async def friend_request_accept(req : FriendAccept, websocket:WebSocket, accepte
     async with async_session() as session:
         try:
             await friend_request_accept_to_db(session, requester_id, accepter_id)
+            await session.commit()
         except (IntegrityError, ValueError):
             await session.rollback()
             await websocket.send_json({"type":"friend_req_accept_error", "message":"invalid request"})
@@ -60,6 +62,7 @@ async def friend_request_declined(req : FriendDecline, websocket:WebSocket, decl
     async with async_session() as session:
         try:
             await friend_req_decline_to_db(session, requester_id, decliner_id)
+            await session.commit()
         except(IntegrityError, ValueError):
             await session.rollback()
             await websocket.send_json({"type":"friend_req_decline_error", "message":"invalid request"})
@@ -79,6 +82,7 @@ async def friend_remove(req: FriendRemove, websocket : WebSocket, remover_id: st
     async with async_session() as session:
         try:
             await friend_remove_from_db(session, removed_id,remover_id)
+            await session.commit()
         except (IntegrityError, ValueError):
             await session.rollback()
             await websocket.send_json({"type":"friend_remove_error", "message":"invalid request"})
