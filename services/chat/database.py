@@ -8,7 +8,7 @@ def _async_url(url: str) -> str:
     parsed = make_url(url)
     if parsed.drivername in ("postgresql", "postgres", "postgresql+psycopg2"):
         parsed = parsed.set(drivername="postgresql+asyncpg")
-    return str(parsed)
+    return parsed.render_as_string(hide_password=False)
 
 
 # This is your connection pool. One instance, shared across the app. It reads the DB URL from your config
