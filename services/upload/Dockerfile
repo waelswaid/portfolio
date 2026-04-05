@@ -3,7 +3,7 @@ FROM python:3.14-slim AS builder
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY upload/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.14-slim
@@ -14,8 +14,8 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
-COPY . .
-
+COPY shared/ /app/shared/
+COPY upload/ /app/
 RUN chown -R appuser:appuser /app
 
 USER appuser

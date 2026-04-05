@@ -69,7 +69,9 @@ services:
       retries: 5
 
   chat:
-    build: ./services/chat
+    build:
+      context: ./services
+      dockerfile: chat/Dockerfile
     restart: unless-stopped
     expose:
       - "8002"
@@ -89,7 +91,9 @@ services:
       retries: 3
 
   upload:
-    build: ./services/upload
+    build:
+      context: ./services
+      dockerfile: upload/Dockerfile
     restart: unless-stopped
     expose:
       - "8003"

@@ -1,65 +1,16 @@
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from connection_manager import manager
+from dispatch.registry import get_handler
+from dispatch.context import RequestContext
 
 logger = logging.getLogger(__name__)
-from schemas.message import Message, LoadHistory
-from schemas.file_message import FileMessage
 from core.auth_token import validate_token
-from services.friend_service import friend_request_handler
 from services.user_db_service import upsert_user
 from database import async_session
-from services.chat_service import send_message, load_chat, chat_list
-from sqlalchemy.exc import SQLAlchemyError
-from pydantic import ValidationError
 
 websocket_router = APIRouter()
 
-# incoming requests are either text message, file upload or friend request
-async def request_filter(data, msg_type:str, user_id:str, user_email, websocket:WebSocket):
-    
-    if msg_type == "message":
-        # pydantic validation and deserialization
-        # data comes in as a raw dict --> pydantic validates each field against type annotations -> produces typed Message instance
-        try:
-            message_model = Message(**data)
-        except ValidationError:
-            await websocket.send_json({"type": "message_error", "message": "invalid payload"})
-            return
-        message, message_to = message_model.message, message_model.to
-        try:
-            await send_message(msg_type, message, user_id, message_to)
-        except SQLAlchemyError:
-            await websocket.send_json({"type": "message_error", "message": "failed to send"})
-
-    elif msg_type == "file_upload":
-        # frontend sends --> {"type":"upload_file", "to":"to_id", "url":"url"}
-        try:
-            file_received = FileMessage(**data)
-        except ValidationError:
-            await websocket.send_json({"type": "message_error", "message": "invalid payload"})
-            return
-        file_to, file_url = file_received.to, file_received.url
-        try:
-            await send_message(msg_type, file_url, user_id, file_to)
-        except SQLAlchemyError:
-            await websocket.send_json({"type": "message_error", "message": "failed to send"})
-
-    elif msg_type == "load_history":
-        try:
-            load_history = LoadHistory(**data)
-        except ValidationError:
-            await websocket.send_json({"type": "load_history_error", "message": "invalid payload"})
-            return
-        dm_key = load_history.dm_key
-        before_message_id = load_history.before
-        await websocket.send_json(await load_chat(dm_key, before_message_id, user_id))
-
-    elif msg_type == "chat_list":
-        await websocket.send_json(await chat_list(user_id))
-
-    else:
-        await friend_request_handler(msg_type,data,websocket,user_id,user_email)
 
 # extract token from websocket -> validate token -> upsert user -> broadcast and return
 async def auth_conn_user(websocket: WebSocket) -> tuple[str, str] | None:
@@ -114,9 +65,28 @@ async def route_to_server(websocket: WebSocket):
         # core loop
         while True:
             # listen for incoming requests
-            data = await websocket.receive_json()
+            try:
+                data = await websocket.receive_json()
+            except ValueError:
+                await websocket.send_json({"type": "error", "message": "invalid JSON"})
+                continue
+
             msg_type = data.get("type")
-            await request_filter(data, msg_type, user_id, user_email, websocket)
+            # returns function based on msg_type from _registry
+            handler = get_handler(msg_type)
+            if handler is None:
+                await websocket.send_json({"type": "error", "message": "unknown type"})
+                continue # <- restarts loop jumps back to while true
+
+            ctx = RequestContext(user_id=user_id, user_email=user_email, websocket=websocket, data=data)
+            try:
+                await handler(ctx)
+            except Exception:
+                logger.exception("handler '%s' failed for user %s", msg_type, user_id)
+                try:
+                    await websocket.send_json({"type": "error", "message": "internal error"})
+                except Exception:
+                    pass
     except (WebSocketDisconnect, RuntimeError):
         # WebSocketDisconnect: normal close (browser tab closed, network drop)
         # RuntimeError: websocket died unexpectedly (e.g. replaced by another connection)

@@ -1,69 +1,98 @@
-Issue 1: Deduplicate chat_handler / ensure_chat_exists
--------------------------------------------------------
-chat_handler duplicated the entire chat-creation block from ensure_chat_exists.
-Refactored chat_handler to call ensure_chat_exists, then only handle message insertion.
+Extract shared library (E3, E4, C3)
+------------------------------------
+auth_token.py was duplicated across chat/ and upload/. JWT algorithm hardcoded.
 
-File: services/chat/services/chat_service.py
+Created services/shared/ with parameterized auth.py and BaseServiceSettings config.
+Both services now inherit shared config and delegate token validation to shared/auth.py.
+JWT_ALGORITHMS is configurable via env var (defaults to ["RS256"]).
+Docker build context widened to ./services so both images can COPY shared/.
 
-Issue 2: Move message orchestration from route to service layer
----------------------------------------------------------------
-request_filter in chat_websocket.py was directly orchestrating ensure_chat_exists,
-producer.produce, and manager.send_personal_message inline for both "message" and
-"file_upload" branches. This mixed routing with business logic.
+Fix fragile DB URL replacement (C6)
+------------------------------------
+.replace("postgresql://", "postgresql+asyncpg://") breaks on postgres:// shorthand.
+Replaced with SQLAlchemy's make_url() parser to handle all driver name variants.
 
-Added send_message() to chat_service.py that owns the ensure -> produce -> send flow.
-Both branches in the route now call send_message() instead of orchestrating 3 calls inline.
-Removed producer and ensure_chat_exists imports from chat_websocket.py.
+Registry-based message dispatch (E1, E2)
+-----------------------------------------
+Problem: all incoming WebSocket messages flowed through two chained if/elif blocks.
+request_filter in chat_websocket.py handled message, file_upload, load_history, chat_list
+and fell through to friend_request_handler in friend_service.py which handled the remaining
+6 friend types. adding a new message type meant modifying one of these functions. both had
+different error handling patterns and parameter signatures.
 
-Files: services/chat/services/chat_service.py, services/chat/routes/chat_websocket.py
+Created dispatch/ package with three components:
+  - dispatch/registry.py: a dict mapping msg_type -> async handler function. @handles("type")
+    decorator registers a handler. get_handler("type") looks it up.
+  - dispatch/context.py: RequestContext dataclass bundling user_id, user_email, websocket, data
+    replacing the inconsistent positional params across the two old dispatchers.
+  - dispatch/handlers/chat_handlers.py: 4 handlers extracted from request_filter — message,
+    file_upload, load_history, chat_list. each validates its own schema and calls the
+    appropriate service function.
+  - dispatch/handlers/friend_handlers.py: 6 handlers extracted from friend_request_handler —
+    friend_request, friend_accept, friend_decline, friend_remove, friend_list, pending_list.
+    each validates its own schema with per-handler ValidationError catching.
 
-Issue 3: Make repo commit ownership consistent
-----------------------------------------------
-friend_system_repo.py committed inside repo functions while chat_repo.py left commits
-to the caller. Mixed ownership made transaction boundaries unclear.
+Replaced request_filter in chat_websocket.py with a 5-line dispatch: get_handler(msg_type),
+build RequestContext, call handler. unknown types return {"type":"error","message":"unknown type"}.
+Removed friend_request_handler from friend_service.py entirely.
+Handler modules are imported in main.py so decorators execute at startup.
 
-Removed session.commit() from all 4 write functions in friend_system_repo.py
-(send_friend_req_to_db, friend_request_accept_to_db, friend_req_decline_to_db,
-friend_remove_from_db). Added session.commit() in friend_service.py after each
-repo call instead. Now all repos follow the same pattern: caller owns the transaction.
+Files created: dispatch/__init__.py, dispatch/registry.py, dispatch/context.py,
+  dispatch/handlers/__init__.py, dispatch/handlers/chat_handlers.py,
+  dispatch/handlers/friend_handlers.py
+Files modified: routes/chat_websocket.py, services/friend_service.py, main.py
 
-Files: services/chat/repository/friend_system_repo.py, services/chat/services/friend_service.py
+Decouple friend service from WebSocket (E5)
+--------------------------------------------
+Problem: every function in friend_service.py (send_friend_request, friend_request_accept,
+friend_request_declined, friend_remove, return_friend_list, return_pending_list) took a
+WebSocket parameter and called websocket.send_json() directly for both the caller response
+and peer notifications. the service layer also imported connection_manager to look up
+other users' websockets. this made it impossible to reuse the friend logic from an HTTP
+endpoint or test without a real/mocked WebSocket.
 
-Kafka A: Consumer calls service layer instead of repo directly
---------------------------------------------------------------
-Consumer was bypassing the service layer — directly importing Message ORM, insert_message,
-and managing its own session/commit. Duplicate persistence logic that would drift from
-chat_handler over time.
+Removed all WebSocket and connection_manager imports from friend_service.py. changed all 6
+function signatures to take plain data params (strings) instead of schema objects + WebSocket.
+each function now returns a dict with two keys:
+  - "response": the JSON payload to send back to the caller
+  - "notify": list of (target_user_id, payload) tuples for peer notifications
+error paths return only "response" with no "notify" key.
 
-Replaced _handle_message body with a call to chat_handler. Removed direct imports of
-async_session, Message, insert_message, SQLAlchemyError. Retry loop with exponential
-backoff preserved around the chat_handler call.
+Transport logic moved to dispatch/handlers/friend_handlers.py. added _send_result(ctx, result)
+helper that sends result["response"] to ctx.websocket and iterates result.get("notify", [])
+to deliver notifications via manager.get_connection(). each handler validates the schema,
+extracts plain params, calls the service function, and passes the result to _send_result.
 
-File: services/chat/kafka/consumer.py
+Files modified: services/friend_service.py, dispatch/handlers/friend_handlers.py
 
-Kafka B: Move fallback logic from producer to service layer
------------------------------------------------------------
-Producer was catching Kafka failures and falling back to a direct DB write via chat_handler.
-This made an infrastructure component aware of business logic. Also, send_personal_message
-in send_message() would not run if producer.produce raised before the fallback caught it
-internally.
+Split send_message and fix consumer circular import (E6, E7)
+-------------------------------------------------------------
+Problem E6: send_message in chat_service.py mixed three concerns in one function —
+ensure_chat_exists (DB), producer.produce (Kafka) with chat_handler fallback (DB), and
+manager.send_personal_message (WebSocket delivery). adding a new delivery channel or
+changing persistence strategy meant modifying this function. chat_service.py imported
+kafka.producer and connection_manager, coupling the service layer to infrastructure.
 
-Made producer pure infrastructure — send_and_wait raises on failure, no fallback, no
-service imports. Moved fallback try/except into send_message() in chat_service.py.
-send_personal_message now runs after the try/except block, so WebSocket delivery happens
-regardless of which persistence path was taken.
+Problem E7: kafka/consumer.py did an inline import at line 53-54
+(from services.chat_service import chat_handler) inside _handle_message to avoid a
+circular dependency — consumer imports chat_service which imports producer which is
+in the same kafka/ package. the consumer's only job is to persist messages to DB, it
+should not depend on the service layer.
 
-Files: services/chat/kafka/producer.py, services/chat/services/chat_service.py
+Replaced send_message and chat_handler with persist_message(msg_type, message, sender_id,
+chat_id) in chat_service.py. persist_message only does the DB insert — opens a session,
+creates a Message ORM object, inserts and commits. chat_service.py no longer imports
+kafka.producer or connection_manager. it only depends on database, repository, and models.
 
-Kafka C: Shared event schema and pass chat_id through consumer path
--------------------------------------------------------------------
-Consumer was calling chat_handler without chat_id, causing a redundant ensure_chat_exists
-SELECT on every consumed message even though the chat is guaranteed to exist. The Kafka
-payload was also an unvalidated raw dict on both sides.
+Moved orchestration to _send_message in dispatch/handlers/chat_handlers.py which now owns
+the full flow: ensure_chat_exists → producer.produce (with persist_message as fallback) →
+manager.send_personal_message. the handler module imports producer and manager since that's
+the transport/infrastructure layer where they belong.
 
-Added ChatMessageEvent Pydantic model in schemas/chat_event.py. Producer validates and
-serializes through it, consumer deserializes and validates with it. chat_handler now
-accepts optional chat_id — consumer and send_message fallback both pass it, skipping
-the redundant query. ensure_chat_exists only runs when chat_id is unknown.
+Consumer now imports persist_message directly at module level — no inline import, no
+circular dependency. consumer also no longer passes receiver_id since persist_message
+only needs sender_id and chat_id for the insert (the old chat_handler accepted receiver_id
+only to potentially re-run ensure_chat_exists, which was redundant since the producer
+already guaranteed the chat exists before producing).
 
-Files: schemas/chat_event.py (new), kafka/producer.py, kafka/consumer.py, services/chat_service.py
+Files modified: services/chat_service.py, dispatch/handlers/chat_handlers.py, kafka/consumer.py

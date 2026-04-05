@@ -1,10 +1,9 @@
-from pydantic_settings import BaseSettings
+from shared.config import BaseServiceSettings
 
-class Settings(BaseSettings):
-    JWT_PUBLIC_KEY : str = ""
-    DATABASE_URL : str = ""
-    CHAT_DATABASE_URL : str = ""
-    KAFKA_BOOTSTRAP_SERVERS : str = "localhost:9092"
+class Settings(BaseServiceSettings):
+    DATABASE_URL: str = ""
+    CHAT_DATABASE_URL: str = ""
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
 
 
 settings = Settings()

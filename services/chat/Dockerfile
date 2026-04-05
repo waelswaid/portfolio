@@ -3,7 +3,7 @@ FROM python:3.14-slim AS builder
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
+COPY chat/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM python:3.14-slim
@@ -18,8 +18,9 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
-COPY . .
-COPY entrypoint.sh /entrypoint.sh
+COPY shared/ /app/shared/
+COPY chat/ /app/
+COPY chat/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 RUN chown -R appuser:appuser /app
 

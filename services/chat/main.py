@@ -5,6 +5,8 @@ from database import engine
 from connection_manager import manager
 from kafka.producer import producer
 from kafka.consumer import consumer
+import dispatch.handlers.chat_handlers  # noqa: F401 — register handlers
+import dispatch.handlers.friend_handlers  # noqa: F401 — register handlers
 
 
 

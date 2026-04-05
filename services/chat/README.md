@@ -1,68 +1,43 @@
-# Chat Server
 
-Web-based chat app built with FastAPI + WebSockets + asyncio.
-Runs as a Docker container on AWS alongside portfolio/ and auth-system/
+### Chat service layers and packages responsibilities
 
-## Features
+| Layer / Package | What it owns |
+|---|---|
+| **`routes/`** | WebSocket endpoint. Accepts connections, authenticates via JWT, runs the core message loop. |
+| **`dispatch/`** | Routing and orchestration. A handler registry maps message types to async handler functions. Handlers validate input schemas, call the service layer, and handle transport (send responses, deliver notifications, produce to Kafka). |
+| **`services/`** | Business logic. Takes plain parameters, operates on the DB through the repository layer, returns plain dicts. No knowledge of WebSockets, Kafka, or connection state. |
+| **`repository/`** | Database queries. Receives a session, runs SQLAlchemy operations, returns ORM objects or scalars. |
+| **`kafka/`** | Producer sends chat messages to Kafka. Consumer reads from Kafka and calls `persist_message` to write to DB. Broker setup handles topic creation. |
+| **`connection_manager`** | Tracks active WebSocket connections. Handles connect/disconnect with a grace period for reconnects. Provides lookup by user ID and broadcast. |
+| **`core/`** | Configuration (Pydantic settings from env vars) and JWT token validation (delegates to `shared/auth`). |
+| **`schemas/`** | Pydantic models for validating incoming WebSocket message payloads. |
 
-### Core
-- [X] Authentication via auth-system 
-- [X] Friends system (add by email, requires confirmation)
-- [X] 1-on-1 chats with users on friends list
-- [ ] Group chats (create, add/remove members)
-- [ ] Chat history (persisted)
+### Chat service layers and packages flows
 
-### Real-time
-- [X] Online/offline presence
-- [ ] Typing indicator
+**Incoming WebSocket message:**
+```
+Client sends JSON → routes/ (core loop) → dispatch/registry resolves handler by "type"
+→ dispatch/handler validates schema, calls services/ → services/ calls repository/ → DB
+→ handler sends response to caller via WebSocket
+→ handler sends notifications to other users via connection_manager
+```
 
-### Media & Search
-- [X] File/image sharing
-- Message search
+**Chat message (with Kafka):**
+```
+Client sends {"type": "message", ...}
+→ handler calls services/ to ensure chat exists (DB)
+→ handler calls kafka/producer to produce message
+→ handler delivers message to recipient via connection_manager
+→ (async) kafka/consumer picks up message → calls services/persist_message → DB
+→ (fallback) if Kafka is unreachable, handler calls persist_message directly
+```
 
-## Tech Stack
-- **Backend:** FastAPI, WebSockets, asyncio
-- **Database:** PostgreSQL (chat history, relationships)
-- **Cache/Pub-Sub:** Redis (presence, typing indicators, WebSocket scaling)
-- **Auth:** auth-system (JWT)
-- **Deployment:** Docker, Nginx (reverse proxy from portfolio)
-
-
-### file upload flow
-    post /server/upload/ with bearer token + file -> returns {"type": "file_upload", "sender_id": "...", "url": "uploads/..."}
-    WebSocket send {"type": "file_upload", "to": "user_id", "url": "uploads/..."} via chat_websocket (send_personal_message)
-    GET /uploads/<filename> → serves the file via StaticFiles (GET endpoint as at main: app.mount("/uploads"...) )
-
-
-### redis
-    - upload endpoint limited to 10/0.5hr per user
-    - voice messages uploads limited to 8mb/30mins per user
-
-### chats and messaging history
- - tables:
-   - messages: message_id (bigint, sequential), chat_id(uuid), user_id(str), msg(str), type(str), timestamp(datetime)
-        - Primary_Key(message_id)
-        - Foreign_Key(chat_id) references chats.chat_id
-        - Foreign_Key(user_id) references users.user_id
-        - index(chat_id, message_id)
-
-   - chats_members: chat_id(uuid), user_id(str, sender), is_admin(boolean), joined_at(datetime)
-        - Primary_Key(chat_id, user_id)
-        - Foreign_Key(chat_id) references chats.chat_id
-        - Foreign_key(user_id) references users.user_id
-    
-    - chats: chat_id (PK), chat_name(str, nullable), created_at(datetime), is_group(boolean), dm_key(str,unique,nullable)
-
-* dm_key: prevents direct chat duplication, when creating DM sort user ids and concatenate them "id1:id2", for group chats it's NULL
-
-- notes to self:
-    query chats by index(chat_id, message_id) for loading chat history
-    query chats by dm_key for direct chats
-
-**implementation order**: 
-
-1. 1-on-1 chat creation with dm_key
-2. messages persistance
-3. introduce group chats creation feature
-4. group chat creation + member managment
-
+**Friend request (example of notify flow):**
+```
+Client sends {"type": "friend_request", "to": "user_123"}
+→ handler validates schema
+→ handler calls services/send_friend_request("user_123", sender_id, sender_email)
+→ service inserts pending request (repo → DB), returns {"response": ..., "notify": [...]}
+→ handler sends response to caller
+→ handler sends notification to user_123 if they're online
+```

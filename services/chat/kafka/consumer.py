@@ -3,6 +3,8 @@ import json
 import logging
 from aiokafka import AIOKafkaConsumer
 from core.config import settings
+from schemas.chat_event import ChatMessageEvent
+from services.chat_service import persist_message
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +52,12 @@ class ChatConsumer:
                 await asyncio.sleep(5)
 
     async def _handle_message(self, payload: dict):
-        from services.chat_service import chat_handler
-        from schemas.chat_event import ChatMessageEvent
         event = ChatMessageEvent(**payload)
         for attempt in range(MAX_RETRIES):
             try:
-                await chat_handler(
+                await persist_message(
                     event.msg_type, event.message,
-                    event.sender_id, event.receiver_id, event.chat_id,
+                    event.sender_id, event.chat_id,
                 )
                 return
             except Exception:

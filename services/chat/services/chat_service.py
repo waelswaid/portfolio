@@ -33,38 +33,22 @@ async def ensure_chat_exists(sender_id: str, receiver_id: str) -> str:
                 await session.commit()
             return chat_id
         except SQLAlchemyError as e:
-            logger.error(f"ensure_chat_exists failed: {e}")
+            logger.error("ensure_chat_exists failed: %s", e)
             await session.rollback()
             raise
 
 
-async def send_message(msg_type: str, message: str, sender_id: str, receiver_id: str):
-    """Orchestrates message sending: ensure chat exists, produce to Kafka, deliver to recipient."""
-    from kafka.producer import producer
-    from connection_manager import manager
-    chat_id = await ensure_chat_exists(sender_id, receiver_id)
-    try:
-        await producer.produce(msg_type, message, sender_id, receiver_id, chat_id)
-    except Exception:
-        logger.warning("Kafka produce failed, falling back to direct DB write", exc_info=True)
-        await chat_handler(msg_type, message, sender_id, receiver_id, chat_id)
-    await manager.send_personal_message(msg_type, receiver_id, message, sender_id)
-
-
-async def chat_handler(msg_type:str, message:str,  sender_id:str, receiver_id:str, chat_id: str | None = None):
-   # insert a message into an existing chat. Used by Kafka consumer and as producer fallback
-    if not chat_id:
-        chat_id = await ensure_chat_exists(sender_id, receiver_id)
+async def persist_message(msg_type: str, message: str, sender_id: str, chat_id: str):
+    """Insert a message into an existing chat. Used by Kafka consumer and as producer fallback."""
     async with async_session() as session:
         try:
             message_orm = Message(chat_id=chat_id, user_id=sender_id, message=message, type=msg_type)
             await insert_message(session, message_orm)
             await session.commit()
         except SQLAlchemyError as e:
-            logger.error(f"chat_handler failed: {e}")
+            logger.error("persist_message failed: %s", e)
             await session.rollback()
             raise
-
 
 
 async def load_chat(dm_key: str, before_message_id:int|None, user_id:str):
