@@ -157,7 +157,7 @@ services:
         condition: service_healthy
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.6.1
     restart: unless-stopped
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
@@ -165,6 +165,7 @@ services:
       - tempo-data:/var/tempo
     expose:
       - "3200"
+      - "4317"
 
   loki:
     image: grafana/loki:3.4.2
