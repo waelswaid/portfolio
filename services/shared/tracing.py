@@ -19,14 +19,11 @@ class KafkaHeaderCarrier:
                 return v.decode() if isinstance(v, bytes) else v
         raise KeyError(key)
 
-    def set(self, key, value):
-        self.__setitem__(key, value)
-
-    def get(self, key):
-        for k, v in self._headers:
-            if k == key:
-                return v.decode() if isinstance(v, bytes) else v
-        return None
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
     def keys(self):
         return [k for k, _ in self._headers]
