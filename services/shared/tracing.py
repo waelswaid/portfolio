@@ -15,9 +15,24 @@ class KafkaHeaderCarrier:
                 return v.decode() if isinstance(v, bytes) else v
         return None
 
-    def set(self, key, value):
+    def __setitem__(self, key, value):
         self._headers = [(k, v) for k, v in self._headers if k != key]
         self._headers.append((key, value.encode() if isinstance(value, str) else value))
+
+    def __getitem__(self, key):
+        for k, v in self._headers:
+            if k == key:
+                return v.decode() if isinstance(v, bytes) else v
+        raise KeyError(key)
+
+    def set(self, key, value):
+        self.__setitem__(key, value)
+
+    def get(self, key):
+        for k, v in self._headers:
+            if k == key:
+                return v.decode() if isinstance(v, bytes) else v
+        return None
 
     def keys(self):
         return [k for k, _ in self._headers]
@@ -25,6 +40,8 @@ class KafkaHeaderCarrier:
     @property
     def headers(self):
         return self._headers
+    
+
 
 
 def inject_trace_context() -> list[tuple[str, bytes]]:
