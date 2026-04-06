@@ -9,12 +9,6 @@ class KafkaHeaderCarrier:
     def __init__(self, headers=None):
         self._headers = list(headers) if headers else []
 
-    def get(self, key):
-        for k, v in self._headers:
-            if k == key:
-                return v.decode() if isinstance(v, bytes) else v
-        return None
-
     def __setitem__(self, key, value):
         self._headers = [(k, v) for k, v in self._headers if k != key]
         self._headers.append((key, value.encode() if isinstance(value, str) else value))
