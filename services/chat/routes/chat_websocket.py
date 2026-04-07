@@ -65,6 +65,7 @@ async def route_to_server(websocket: WebSocket):
 
     deps = Deps(
         chat_service=websocket.app.state.chat_service,
+        friend_service=websocket.app.state.friend_service,
         producer=websocket.app.state.producer,
         manager=websocket.app.state.manager,
     )

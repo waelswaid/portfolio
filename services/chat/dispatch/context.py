@@ -6,6 +6,7 @@ from fastapi import WebSocket
 @dataclass
 class Deps:
     chat_service: object
+    friend_service: object
     producer: object
     manager: object
 
