@@ -1,21 +1,28 @@
 from fastapi import FastAPI
 from routes.chat_websocket import websocket_router
 from contextlib import asynccontextmanager
-from database import engine
+from database import engine, async_session
 from connection_manager import manager
 from kafka.producer import producer
-from kafka.consumer import consumer
+from kafka.consumer import ChatConsumer
 from shared.observability import init_observability, shutdown_observability
 from shared.health import check_postgres, check_kafka, build_health_response
 from core.config import settings
+from services.chat_service import ChatService
 import dispatch.handlers.chat_handlers  # noqa: F401 — register handlers
 import dispatch.handlers.friend_handlers  # noqa: F401 — register handlers
 
 init_observability("chat", engine=engine)
 
+chat_service = ChatService(async_session)
+consumer = ChatConsumer(persist_message=chat_service.persist_message)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.chat_service = chat_service
+    app.state.producer = producer
+    app.state.manager = manager
     await producer.start()
     consumer.start()
     yield

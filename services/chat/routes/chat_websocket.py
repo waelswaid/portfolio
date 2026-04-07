@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from connection_manager import manager
 from dispatch.registry import get_handler
-from dispatch.context import RequestContext
+from dispatch.context import RequestContext, Deps
 from shared.tracing import ws_span
 from shared.metrics import ws_messages_total
 
@@ -63,6 +63,12 @@ async def route_to_server(websocket: WebSocket):
         return
     user_id, user_email = user_data
 
+    deps = Deps(
+        chat_service=websocket.app.state.chat_service,
+        producer=websocket.app.state.producer,
+        manager=websocket.app.state.manager,
+    )
+
     try:
         # core loop
         while True:
@@ -80,7 +86,7 @@ async def route_to_server(websocket: WebSocket):
                 await websocket.send_json({"type": "error", "message": "unknown type"})
                 continue # <- restarts loop jumps back to while true
 
-            ctx = RequestContext(user_id=user_id, user_email=user_email, websocket=websocket, data=data)
+            ctx = RequestContext(user_id=user_id, user_email=user_email, websocket=websocket, data=data, deps=deps)
             try:
                 async with ws_span("ws.handle", {"ws.message_type": msg_type, "user.id": user_id}):
                     await handler(ctx)

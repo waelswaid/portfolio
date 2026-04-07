@@ -1,5 +1,13 @@
-from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass, field
 from fastapi import WebSocket
+
+
+@dataclass
+class Deps:
+    chat_service: object
+    producer: object
+    manager: object
 
 
 @dataclass
@@ -8,6 +16,7 @@ class RequestContext:
     user_email: str
     websocket: WebSocket
     data: dict
+    deps: Deps | None = field(default=None)
 
 
 """

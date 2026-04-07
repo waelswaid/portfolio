@@ -5,7 +5,6 @@ from aiokafka import AIOKafkaConsumer
 from opentelemetry import trace, context
 from core.config import settings
 from schemas.chat_event import ChatMessageEvent
-from services.chat_service import persist_message
 from shared.tracing import extract_trace_context
 from shared.metrics import kafka_messages_consumed, kafka_consumer_errors
 
@@ -17,7 +16,8 @@ RETRY_DELAYS = [1, 2, 4]
 
 
 class ChatConsumer:
-    def __init__(self):
+    def __init__(self, persist_message):
+        self._persist_message = persist_message
         self._task: asyncio.Task | None = None
         self._consumer: AIOKafkaConsumer | None = None
 
@@ -79,7 +79,7 @@ class ChatConsumer:
         event = ChatMessageEvent(**payload)
         for attempt in range(MAX_RETRIES):
             try:
-                await persist_message(
+                await self._persist_message(
                     event.msg_type, event.message,
                     event.sender_id, event.chat_id,
                 )
@@ -96,4 +96,3 @@ class ChatConsumer:
         return False
 
 
-consumer = ChatConsumer()

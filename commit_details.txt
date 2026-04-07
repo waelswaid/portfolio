@@ -1,0 +1,8 @@
+ChatService dependency injection refactor (6 files):
+
+- chat_service.py: Replaced 4 standalone functions (ensure_chat_exists, persist_message, load_chat, chat_list) with a ChatService class that receives session_factory via __init__. Removed hardwired `from database import async_session`. Kept generate_dm_key as a standalone pure function.
+- context.py: Added Deps dataclass (chat_service, producer, manager — all required fields). Added optional deps field to RequestContext.
+- chat_handlers.py: Removed module-level imports of producer, manager, and chat_service functions. _send_message now receives Deps as a parameter. All handlers access dependencies via ctx.deps.
+- consumer.py: ChatConsumer.__init__ now accepts a persist_message callable. Removed module-level singleton. Uses self._persist_message instead of imported function.
+- main.py: Instantiates ChatService(async_session) and ChatConsumer(persist_message=chat_service.persist_message). Stores chat_service, producer, manager on app.state during lifespan.
+- chat_websocket.py: Builds Deps from app.state once per connection (hoisted above the message loop). Passes deps into RequestContext on each message.
