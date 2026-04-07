@@ -10,6 +10,7 @@ from shared.tracing import extract_trace_context
 from shared.metrics import kafka_messages_consumed, kafka_consumer_errors
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 MAX_RETRIES = 3
 RETRY_DELAYS = [1, 2, 4]
@@ -45,14 +46,17 @@ class ChatConsumer:
                     async for msg in self._consumer:
                         if msg.value is not None:
                             token = None
+                            extract_exc = None
                             try:
                                 ctx = extract_trace_context(msg.headers)
                                 token = context.attach(ctx)
-                            except Exception:
+                            except Exception as exc:
+                                extract_exc = exc
                                 logger.warning("trace context extraction failed", exc_info=True)
                             try:
-                                tracer = trace.get_tracer(__name__)
                                 with tracer.start_as_current_span("kafka.consume chat-messages", kind=trace.SpanKind.CONSUMER) as span:
+                                    if extract_exc is not None:
+                                        span.record_exception(extract_exc)
                                     span.set_attribute("messaging.system", "kafka")
                                     span.set_attribute("messaging.destination", "chat-messages")
                                     success = await self._handle_message(msg.value)
