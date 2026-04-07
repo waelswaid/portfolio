@@ -44,8 +44,12 @@ class ChatConsumer:
                 try:
                     async for msg in self._consumer:
                         if msg.value is not None:
-                            ctx = extract_trace_context(msg.headers)
-                            token = context.attach(ctx)
+                            token = None
+                            try:
+                                ctx = extract_trace_context(msg.headers)
+                                token = context.attach(ctx)
+                            except Exception:
+                                logger.warning("trace context extraction failed", exc_info=True)
                             try:
                                 tracer = trace.get_tracer(__name__)
                                 with tracer.start_as_current_span("kafka.consume chat-messages", kind=trace.SpanKind.CONSUMER) as span:
@@ -56,7 +60,8 @@ class ChatConsumer:
                                         span.set_status(trace.StatusCode.ERROR, "max retries exhausted")
                                 kafka_messages_consumed.add(1)
                             finally:
-                                context.detach(token)
+                                if token is not None:
+                                    context.detach(token)
                         await self._consumer.commit()
                 finally:
                     await self._consumer.stop()

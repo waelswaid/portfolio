@@ -1,6 +1,9 @@
 import contextlib
+import logging
 from opentelemetry import trace, context
 from opentelemetry.propagate import get_global_textmap
+
+logger = logging.getLogger(__name__)
 
 
 class KafkaHeaderCarrier:
@@ -52,10 +55,21 @@ def extract_trace_context(headers) -> context.Context:
 async def ws_span(name: str, attributes: dict | None = None):
     """Create a traced span for WebSocket operations (not auto-instrumented by OTel)."""
     tracer = trace.get_tracer(__name__)
-    with tracer.start_as_current_span(name, kind=trace.SpanKind.SERVER, attributes=attributes or {}) as span:
-        try:
-            yield span
-        except Exception as exc:
-            span.set_status(trace.StatusCode.ERROR, str(exc))
-            span.record_exception(exc)
-            raise
+    try:
+        span = tracer.start_span(name, kind=trace.SpanKind.SERVER, attributes=attributes or {})
+    except Exception:
+        logger.warning("failed to create span %s", name, exc_info=True)
+        yield None
+        return
+
+    ctx = trace.set_span_in_context(span)
+    token = context.attach(ctx)
+    try:
+        yield span
+    except Exception as exc:
+        span.set_status(trace.StatusCode.ERROR, str(exc))
+        span.record_exception(exc)
+        raise
+    finally:
+        span.end()
+        context.detach(token)
