@@ -57,7 +57,7 @@ async def route_to_server(websocket: WebSocket):
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.debug("websocket close failed during auth cleanup", exc_info=True)
         return
     if not user_data:
         return
@@ -90,11 +90,9 @@ async def route_to_server(websocket: WebSocket):
                 try:
                     await websocket.send_json({"type": "error", "message": "internal error"})
                 except Exception:
-                    pass
+                    logger.debug("failed to send error response to user %s", user_id, exc_info=True)
     except (WebSocketDisconnect, RuntimeError):
-        # WebSocketDisconnect: normal close (browser tab closed, network drop)
-        # RuntimeError: websocket died unexpectedly (e.g. replaced by another connection)
-        pass
+        logger.debug("websocket closed for user %s", user_id)
     except Exception:
         logger.exception("unexpected error in WebSocket handler for user %s", user_id)
     finally:

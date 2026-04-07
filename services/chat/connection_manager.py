@@ -103,17 +103,17 @@ class ConnectionManager:
         sender_email = sender_conn["email"]
         try:
             await to_conn["websocket"].send_json({"type": msg_type, "from": sender_email, "from_id": sender_id, "message": message})
-        except Exception:
-            logger.warning("send_personal_message failed for user %s", to)
+        except Exception as exc:
+            logger.error("send_personal_message failed for user %s: %s", to, exc)
 
     async def broadcast(self, message: dict):
-        for inner in self.active_connections.values():
+        for uid, inner in self.active_connections.items():
             # skip users in grace period (no active websocket)
             if inner["websocket"] is not None:
                 try:
                     await inner["websocket"].send_json(message)
-                except Exception:
-                    logger.warning("broadcast send failed for a connection")
+                except Exception as exc:
+                    logger.error("broadcast send failed for user %s: %s", uid, exc)
 
     def get_connection(self, user_id: str) -> WebSocket | None:
         inner = self.active_connections.get(user_id)

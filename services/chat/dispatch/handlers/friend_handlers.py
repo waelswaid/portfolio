@@ -1,3 +1,4 @@
+import logging
 from dispatch.registry import handles
 from dispatch.context import RequestContext
 from schemas.friend_request import FriendRequest, FriendAccept, FriendDecline, FriendRemove
@@ -8,6 +9,9 @@ from services.friend_service import (
 from connection_manager import manager
 from pydantic import ValidationError
 
+logger = logging.getLogger(__name__)
+
+
 # helper function that sends the response back to the caller, sends the notify back to the other user
 async def _send_result(ctx: RequestContext, result: dict) -> None:
     await ctx.websocket.send_json(result["response"])
@@ -16,8 +20,8 @@ async def _send_result(ctx: RequestContext, result: dict) -> None:
         if ws:
             try:
                 await ws.send_json(payload)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error("failed to send notification to user %s: %s", target_id, exc)
 
 
 @handles("friend_request")
