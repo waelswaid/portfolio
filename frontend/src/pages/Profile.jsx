@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
 import useAuth from '../hooks/useAuth'
 import Layout from '../components/Layout'
+import LoadingScreen from '../components/ui/LoadingScreen'
+import Card from '../components/ui/Card'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+import Alert from '../components/ui/Alert'
 import parseError from '../utils/parseError'
 
 export default function Profile() {
@@ -127,195 +132,124 @@ export default function Profile() {
     }
   }
 
-  if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-        </div>
-      </div>
-    )
-  }
+  if (loading || !user) return <LoadingScreen />
 
   return (
     <Layout user={user} title="Edit Profile" backTo="/">
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6 animate-fade-in-up">
         {/* Edit Name */}
-        <div className="bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-8 card-glow">
+        <Card>
           <h2 className="text-xl font-bold text-gray-100 mb-6">Edit Profile</h2>
-
-          {profileError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20 text-sm">{profileError}</div>
-          )}
-          {profileSuccess && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 text-sm">{profileSuccess}</div>
-          )}
+          <Alert type="error">{profileError}</Alert>
+          <Alert type="success">{profileSuccess}</Alert>
 
           <form onSubmit={handleProfileSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-              <input
-                type="email"
-                disabled
-                value={user?.email || ''}
-                className="w-full px-4 py-2.5 bg-gray-900/30 border border-gray-800 rounded-lg text-gray-500 cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="first-name" className="block text-sm font-medium text-gray-300 mb-1">
-                First name
-              </label>
-              <input
-                id="first-name"
-                type="text"
-                required
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="last-name" className="block text-sm font-medium text-gray-300 mb-1">
-                Last name
-              </label>
-              <input
-                id="last-name"
-                type="text"
-                required
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={profileLoading}
-              className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-blue-500/20"
-            >
+            <Input
+              type="email"
+              label="Email"
+              disabled
+              value={user?.email || ''}
+            />
+            <Input
+              id="first-name"
+              label="First name"
+              type="text"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+            <Input
+              id="last-name"
+              label="Last name"
+              type="text"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+            <Button type="submit" disabled={profileLoading}>
               {profileLoading ? 'Saving...' : 'Save'}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* Change Password */}
-        <div className="bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-8 card-glow">
+        <Card>
           <h2 className="text-xl font-bold text-gray-100 mb-6">Change Password</h2>
-
-          {pwError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20 text-sm">{pwError}</div>
-          )}
-          {pwSuccess && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 text-sm">{pwSuccess}</div>
-          )}
+          <Alert type="error">{pwError}</Alert>
+          <Alert type="success">{pwSuccess}</Alert>
 
           <form onSubmit={handlePasswordSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="current-password" className="block text-sm font-medium text-gray-300 mb-1">
-                Current password
-              </label>
-              <input
-                id="current-password"
-                type="password"
-                required
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
-                placeholder="Enter current password"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="new-password" className="block text-sm font-medium text-gray-300 mb-1">
-                New password
-              </label>
-              <input
-                id="new-password"
-                type="password"
-                required
-                minLength={8}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
-                placeholder="Min 8 characters"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={pwLoading}
-              className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-blue-500/20"
-            >
+            <Input
+              id="current-password"
+              label="Current password"
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+            />
+            <Input
+              id="new-password"
+              label="New password"
+              type="password"
+              required
+              minLength={8}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Min 8 characters"
+            />
+            <Button type="submit" disabled={pwLoading}>
               {pwLoading ? 'Changing...' : 'Change password'}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* Delete Account */}
-        <div className="bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-red-500/20 p-8">
+        <Card danger>
           <h2 className="text-xl font-bold text-red-400 mb-2">Delete Account</h2>
           <p className="text-sm text-gray-400 mb-6">
             This action is permanent and cannot be undone. All your data will be erased.
           </p>
 
           {!showDeleteConfirm ? (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="px-6 py-2.5 bg-transparent text-red-400 font-medium rounded-lg border border-red-500/30 hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-colors"
-            >
+            <Button variant="ghost" onClick={() => setShowDeleteConfirm(true)}>
               Delete my account
-            </button>
+            </Button>
           ) : (
             <>
-              {deleteError && (
-                <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20 text-sm">{deleteError}</div>
-              )}
+              <Alert type="error">{deleteError}</Alert>
 
               <form onSubmit={handleDeleteAccount} className="space-y-5">
-                <div>
-                  <label htmlFor="delete-password" className="block text-sm font-medium text-gray-300 mb-1">
-                    Enter your password to confirm
-                  </label>
-                  <input
-                    id="delete-password"
-                    type="password"
-                    required
-                    minLength={8}
-                    value={deletePassword}
-                    onChange={(e) => setDeletePassword(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500/50 transition-colors"
-                    placeholder="Enter your password"
-                  />
-                </div>
-
+                <Input
+                  id="delete-password"
+                  label="Enter your password to confirm"
+                  type="password"
+                  required
+                  minLength={8}
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  placeholder="Enter your password"
+                />
                 <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={deleteLoading}
-                    className="px-6 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-red-500/20"
-                  >
+                  <Button type="submit" variant="danger" disabled={deleteLoading}>
                     {deleteLoading ? 'Deleting...' : 'Permanently delete'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="secondary"
                     onClick={() => {
                       setShowDeleteConfirm(false)
                       setDeletePassword('')
                       setDeleteError('')
                     }}
-                    className="px-6 py-2.5 bg-gray-700/50 text-gray-300 font-medium rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 transition-colors"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </form>
             </>
           )}
-        </div>
+        </Card>
       </main>
     </Layout>
   )

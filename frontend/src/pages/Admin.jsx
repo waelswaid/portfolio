@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import useAuth from '../hooks/useAuth'
 import Layout from '../components/Layout'
+import LoadingScreen, { LoadingDots } from '../components/ui/LoadingScreen'
+import Card from '../components/ui/Card'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
+import Alert from '../components/ui/Alert'
+import Badge from '../components/ui/Badge'
 import parseError from '../utils/parseError'
 
 export default function Admin() {
@@ -43,85 +49,61 @@ export default function Admin() {
     if (currentUser) fetchUsers()
   }, [currentUser, fetchUsers])
 
-  async function handleRoleChange(userId, newRole) {
+  async function handleAction(userId, key, action) {
     setSuccess('')
-    const key = `${userId}-role`
     setActionLoading((prev) => ({ ...prev, [key]: true }))
     try {
-      const res = await fetch(`/api/admin/users/${userId}/role`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ role: newRole }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        setError(parseError(data, 'Role update failed'))
-        return
-      }
-
-      fetchUsers()
+      await action()
     } catch {
       setError('Network error. Please try again.')
     } finally {
       setActionLoading((prev) => ({ ...prev, [key]: false }))
     }
+  }
+
+  async function handleRoleChange(userId, newRole) {
+    await handleAction(userId, `${userId}-role`, async () => {
+      const res = await fetch(`/api/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ role: newRole }),
+      })
+      if (!res.ok) {
+        setError(parseError(await res.json(), 'Role update failed'))
+        return
+      }
+      fetchUsers()
+    })
   }
 
   async function handleToggleDisable(userId, currentlyDisabled) {
-    setSuccess('')
-    const key = `${userId}-disable`
-    setActionLoading((prev) => ({ ...prev, [key]: true }))
-    try {
+    await handleAction(userId, `${userId}-disable`, async () => {
       const res = await fetch(`/api/admin/users/${userId}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ is_disabled: !currentlyDisabled }),
       })
-
       if (!res.ok) {
-        const data = await res.json()
-        setError(parseError(data, 'Status update failed'))
+        setError(parseError(await res.json(), 'Status update failed'))
         return
       }
-
       fetchUsers()
-    } catch {
-      setError('Network error. Please try again.')
-    } finally {
-      setActionLoading((prev) => ({ ...prev, [key]: false }))
-    }
+    })
   }
 
   async function handleForceReset(userId) {
-    setSuccess('')
-    const key = `${userId}-reset`
-    setActionLoading((prev) => ({ ...prev, [key]: true }))
-    try {
+    await handleAction(userId, `${userId}-reset`, async () => {
       const res = await fetch(`/api/admin/users/${userId}/force-password-reset`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       })
-
       if (!res.ok) {
-        const data = await res.json()
-        setError(parseError(data, 'Force reset failed'))
+        setError(parseError(await res.json(), 'Force reset failed'))
         return
       }
-
       setError('')
       setSuccess('Password reset email sent')
-    } catch {
-      setError('Network error. Please try again.')
-    } finally {
-      setActionLoading((prev) => ({ ...prev, [key]: false }))
-    }
+    })
   }
 
   async function handleInviteUser(e) {
@@ -133,20 +115,14 @@ export default function Admin() {
     try {
       const res = await fetch('/api/admin/users/invite', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ email: inviteEmail }),
       })
-
       const data = await res.json()
-
       if (!res.ok) {
         setError(parseError(data, 'Invite failed'))
         return
       }
-
       setInviteSuccess('Invitation sent!')
       setInviteEmail('')
     } catch {
@@ -156,59 +132,35 @@ export default function Admin() {
     }
   }
 
-  if (authLoading || !currentUser) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-        </div>
-      </div>
-    )
-  }
+  if (authLoading || !currentUser) return <LoadingScreen />
 
   return (
     <Layout user={currentUser} title="Admin Panel" backTo="/" maxWidth="max-w-5xl">
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20 text-sm">{error}</div>
-        )}
-
-        {success && (
-          <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 text-sm">{success}</div>
-        )}
+      <main className="max-w-5xl mx-auto px-4 py-8 animate-fade-in-up">
+        <Alert type="error">{error}</Alert>
+        <Alert type="success">{success}</Alert>
 
         {/* Invite User */}
-        <div className="mb-6 bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-6 card-glow">
+        <Card className="mb-6">
           <h2 className="text-lg font-bold text-gray-100 mb-4">Invite User</h2>
-          {inviteSuccess && (
-            <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 text-sm">{inviteSuccess}</div>
-          )}
+          <Alert type="success">{inviteSuccess}</Alert>
           <form onSubmit={handleInviteUser} className="flex items-end gap-3">
             <div className="flex-1">
-              <label htmlFor="invite-email" className="block text-sm font-medium text-gray-300 mb-1">
-                Email address
-              </label>
-              <input
+              <Input
                 id="invite-email"
+                label="Email address"
                 type="email"
                 required
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                className="w-full px-4 py-2.5 bg-gray-900/50 border border-gray-700/50 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-colors"
                 placeholder="user@example.com"
               />
             </div>
-            <button
-              type="submit"
-              disabled={inviteLoading}
-              className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-blue-500/20"
-            >
+            <Button type="submit" disabled={inviteLoading}>
               {inviteLoading ? 'Sending...' : 'Send invite'}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
 
         {/* Filter */}
         <div className="mb-6 flex items-center gap-3">
@@ -233,12 +185,8 @@ export default function Admin() {
         {/* User Table */}
         <div className="bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center">
-              <div className="flex items-center justify-center gap-3">
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-              </div>
+            <div className="p-8 flex justify-center">
+              <LoadingDots />
             </div>
           ) : (
             <table className="w-full">
@@ -257,57 +205,37 @@ export default function Admin() {
                     <td className="px-6 py-4 text-sm text-gray-200">{u.first_name} {u.last_name}</td>
                     <td className="px-6 py-4 text-sm text-gray-400">{u.email}</td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          u.role === 'admin'
-                            ? 'bg-purple-500/10 text-purple-400 ring-1 ring-purple-500/20'
-                            : 'bg-gray-500/10 text-gray-400 ring-1 ring-gray-500/20'
-                        }`}
-                      >
-                        {u.role}
-                      </span>
+                      <Badge variant={u.role}>{u.role}</Badge>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          u.is_disabled
-                            ? 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20'
-                            : 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20'
-                        }`}
-                      >
+                      <Badge variant={u.is_disabled ? 'disabled' : 'active'}>
                         {u.is_disabled ? 'Disabled' : 'Active'}
-                      </span>
+                      </Badge>
                     </td>
                     <td className="px-6 py-4">
                       {u.id !== currentUser.id && (
                         <div className="flex items-center gap-3">
-                          <button
-                            onClick={() =>
-                              handleRoleChange(u.id, u.role === 'admin' ? 'user' : 'admin')
-                            }
+                          <ActionLink
+                            onClick={() => handleRoleChange(u.id, u.role === 'admin' ? 'user' : 'admin')}
                             disabled={actionLoading[`${u.id}-role`]}
-                            className="text-sm text-blue-400 hover:text-blue-300 font-medium disabled:opacity-50 transition-colors"
+                            className="text-blue-400 hover:text-blue-300"
                           >
                             Make {u.role === 'admin' ? 'user' : 'admin'}
-                          </button>
-                          <button
+                          </ActionLink>
+                          <ActionLink
                             onClick={() => handleToggleDisable(u.id, u.is_disabled)}
                             disabled={actionLoading[`${u.id}-disable`]}
-                            className={`text-sm font-medium disabled:opacity-50 transition-colors ${
-                              u.is_disabled
-                                ? 'text-emerald-400 hover:text-emerald-300'
-                                : 'text-amber-400 hover:text-amber-300'
-                            }`}
+                            className={u.is_disabled ? 'text-emerald-400 hover:text-emerald-300' : 'text-amber-400 hover:text-amber-300'}
                           >
                             {u.is_disabled ? 'Enable' : 'Disable'}
-                          </button>
-                          <button
+                          </ActionLink>
+                          <ActionLink
                             onClick={() => handleForceReset(u.id)}
                             disabled={actionLoading[`${u.id}-reset`]}
-                            className="text-sm text-gray-400 hover:text-gray-300 font-medium disabled:opacity-50 transition-colors"
+                            className="text-gray-400 hover:text-gray-300"
                           >
                             Reset password
-                          </button>
+                          </ActionLink>
                         </div>
                       )}
                     </td>
@@ -327,25 +255,29 @@ export default function Admin() {
 
         {/* Pagination */}
         <div className="mt-4 flex items-center justify-between">
-          <button
-            onClick={() => setSkip(Math.max(0, skip - limit))}
-            disabled={skip === 0}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800/60 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button variant="secondary" onClick={() => setSkip(Math.max(0, skip - limit))} disabled={skip === 0}>
             Previous
-          </button>
+          </Button>
           <span className="text-sm text-gray-400">
             Showing {skip + 1}–{skip + users.length}
           </span>
-          <button
-            onClick={() => setSkip(skip + limit)}
-            disabled={users.length < limit}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-800/60 border border-gray-700/50 rounded-lg hover:bg-gray-700/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <Button variant="secondary" onClick={() => setSkip(skip + limit)} disabled={users.length < limit}>
             Next
-          </button>
+          </Button>
         </div>
       </main>
     </Layout>
+  )
+}
+
+function ActionLink({ onClick, disabled, className, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`text-sm font-medium disabled:opacity-50 transition-colors ${className}`}
+    >
+      {children}
+    </button>
   )
 }
