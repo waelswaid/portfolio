@@ -1,6 +1,6 @@
 const variants = {
   primary:
-    'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/20 focus:ring-blue-500/50',
+    'bg-cyan-600 text-white hover:bg-cyan-500 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-400/30 focus:ring-cyan-500/50',
   danger:
     'bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-500/20 focus:ring-red-500/50',
   secondary:
@@ -22,7 +22,7 @@ export default function Button({
 }) {
   return (
     <button
-      className={`${full ? 'w-full' : ''} px-6 py-2.5 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm ${variants[variant]} ${className}`}
+      className={`${full ? 'w-full' : ''} px-6 py-2.5 font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm ${variants[variant]} ${className}`}
       {...props}
     >
       {children}

@@ -174,7 +174,7 @@ export default function Admin() {
               setRoleFilter(e.target.value)
               setSkip(0)
             }}
-            className="px-3 py-2 bg-gray-800/60 border border-gray-700/50 rounded-lg text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm transition-colors"
+            className="px-3 py-2 bg-gray-800/60 border border-gray-700/50 rounded-lg text-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-sm transition-colors"
           >
             <option value="">All</option>
             <option value="user">Users</option>
@@ -218,7 +218,7 @@ export default function Admin() {
                           <ActionLink
                             onClick={() => handleRoleChange(u.id, u.role === 'admin' ? 'user' : 'admin')}
                             disabled={actionLoading[`${u.id}-role`]}
-                            className="text-blue-400 hover:text-blue-300"
+                            className="text-cyan-400 hover:text-cyan-300"
                           >
                             Make {u.role === 'admin' ? 'user' : 'admin'}
                           </ActionLink>

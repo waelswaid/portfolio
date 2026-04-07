@@ -1,9 +1,14 @@
 export function LoadingDots() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
+    <div className="relative w-10 h-10">
+      <div
+        className="absolute inset-0 rounded-full border-2 border-cyan-500/20"
+        style={{ animation: 'pulse-glow 2s ease-in-out infinite' }}
+      />
+      <div
+        className="absolute inset-0 rounded-full border-2 border-transparent border-t-cyan-400"
+        style={{ animation: 'spin-arc 1s linear infinite' }}
+      />
     </div>
   )
 }

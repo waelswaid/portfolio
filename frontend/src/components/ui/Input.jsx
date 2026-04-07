@@ -9,10 +9,10 @@ export default function Input({ id, label, disabled, className = '', ...props })
       <input
         id={id}
         disabled={disabled}
-        className={`w-full px-4 py-2.5 rounded-lg transition-colors ${
+        className={`w-full px-4 py-2.5 rounded-lg transition-all duration-200 ${
           disabled
             ? 'bg-gray-900/30 border border-gray-800 text-gray-500 cursor-not-allowed'
-            : 'bg-gray-900/50 border border-gray-700/50 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50'
+            : 'bg-gray-900/50 border border-gray-700/50 text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50'
         } ${className}`}
         {...props}
       />

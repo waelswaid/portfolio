@@ -84,7 +84,7 @@ export default function ResetPassword() {
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-400">
-        <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+        <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
           Back to sign in
         </Link>
       </p>

@@ -18,7 +18,7 @@ export default function Layout({ user, title, backTo, maxWidth = 'max-w-3xl', ch
         <div className={`${maxWidth} mx-auto px-4 py-3 flex items-center justify-between`}>
           <div className="flex items-center gap-4">
             {backTo && (
-              <Link to={backTo} className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
+              <Link to={backTo} className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
                 &larr; Back
               </Link>
             )}
@@ -58,7 +58,7 @@ export default function Layout({ user, title, backTo, maxWidth = 'max-w-3xl', ch
               to={link.to}
               className={`flex-1 text-center py-2.5 text-xs font-medium transition-colors ${
                 location.pathname === link.to
-                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  ? 'text-cyan-400 border-b-2 border-cyan-400'
                   : 'text-gray-500 hover:text-gray-300'
               }`}
             >

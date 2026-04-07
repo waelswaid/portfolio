@@ -36,7 +36,7 @@ export default function VerifyEmail() {
       <div className="w-full max-w-md bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 p-8 text-center card-glow animate-fade-in-up">
         {status === 'loading' && (
           <>
-            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4" />
+            <div className="animate-spin h-8 w-8 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-4" />
             <p className="text-gray-400">Verifying your email...</p>
           </>
         )}
@@ -61,7 +61,7 @@ export default function VerifyEmail() {
             <div className="mb-6 p-3 rounded-lg bg-red-500/10 text-red-400 ring-1 ring-red-500/20 text-sm">
               {error}
             </div>
-            <Link to="/resend-verification" className="text-blue-400 hover:text-blue-300 font-medium text-sm transition-colors">
+            <Link to="/resend-verification" className="text-cyan-400 hover:text-cyan-300 font-medium text-sm transition-colors">
               Resend verification email
             </Link>
           </>
