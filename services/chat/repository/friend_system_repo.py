@@ -1,6 +1,5 @@
 from models.friendships import Friendships
 from models.pending_requests import PendingRequests
-from database import async_session
 from sqlalchemy import delete, or_, and_, select
 
 async def send_friend_req_to_db(session, to:str, user_id: str) -> None:

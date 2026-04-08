@@ -1,4 +1,3 @@
-from database import async_session
 from sqlalchemy import delete, or_, and_, select, func
 from models.chats import Chat
 from models.chat_members import ChatMember
