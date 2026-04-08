@@ -11,6 +11,18 @@ import ChatHeader from '../components/chat/ChatHeader'
 import MessageBubble from '../components/chat/MessageBubble'
 import MessageInput from '../components/chat/MessageInput'
 
+function formatDateLabel(timestamp) {
+  const date = new Date(timestamp)
+  if (isNaN(date.getTime())) return ''
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return 'Today'
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 export default function Chat() {
   const { user, loading } = useAuth()
   const logout = useLogout()
@@ -162,9 +174,26 @@ export default function Chat() {
                     <span className="text-xs text-slate-500">Loading...</span>
                   </div>
                 )}
-                {filteredMessages.map((m, i) => (
-                  <MessageBubble key={i} message={m} />
-                ))}
+                {filteredMessages.map((m, i) => {
+                  const prevTs = i > 0 ? filteredMessages[i - 1].timestamp : null
+                  const prevDate = prevTs ? new Date(prevTs).toDateString() : null
+                  const currDate = m.timestamp ? new Date(m.timestamp).toDateString() : null
+                  const showDate = currDate && currDate !== prevDate
+                  return (
+                    <div key={m.message_id}>
+                      {showDate && (
+                        <div className="flex items-center gap-3 py-2">
+                          <div className="flex-1 h-px bg-slate-700/50" />
+                          <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
+                            {formatDateLabel(m.timestamp)}
+                          </span>
+                          <div className="flex-1 h-px bg-slate-700/50" />
+                        </div>
+                      )}
+                      <MessageBubble message={m} />
+                    </div>
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </div>
 

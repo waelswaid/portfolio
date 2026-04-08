@@ -60,7 +60,7 @@ class ChatService:
                 return {"type": "message_error", "message": "unauthorized chat"}
             messages = await load_messages(session, chat_id, before_message_id)
             return {"type": "load_history", "dm_key": dm_key, "messages": [
-                {"message_id": m.message_id, "user_id": m.user_id, "message": m.message, "type": m.type, "timestamp": str(m.timestamp)}
+                {"message_id": m.message_id, "user_id": m.user_id, "message": m.message, "type": m.type, "timestamp": m.timestamp.isoformat()}
                 for m in reversed(messages)]}
 
     async def chat_list(self, user_id: str):

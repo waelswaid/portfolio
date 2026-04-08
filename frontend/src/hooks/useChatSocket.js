@@ -97,7 +97,7 @@ export default function useChatSocket(user) {
               ...prev,
               [dmKey]: {
                 ...chat,
-                history: [...chat.history, { message_id: Date.now(), from: data.from, message: data.message, isMine: false }],
+                history: [...chat.history, { message_id: Date.now(), from: data.from, message: data.message, isMine: false, timestamp: new Date().toISOString() }],
               },
             }
           })
@@ -110,7 +110,7 @@ export default function useChatSocket(user) {
               ...prev,
               [dmKey]: {
                 ...chat,
-                history: [...chat.history, { message_id: Date.now(), from: data.from, message: data.message, isMine: false, type: 'file_upload' }],
+                history: [...chat.history, { message_id: Date.now(), from: data.from, message: data.message, isMine: false, type: 'file_upload', timestamp: new Date().toISOString() }],
               },
             }
           })
@@ -206,7 +206,7 @@ export default function useChatSocket(user) {
         ...prev,
         [dmKey]: {
           ...chat,
-          history: [...chat.history, { message_id: Date.now(), from: 'You', message, isMine: true }],
+          history: [...chat.history, { message_id: Date.now(), from: 'You', message, isMine: true, timestamp: new Date().toISOString() }],
         },
       }
     })
@@ -221,7 +221,7 @@ export default function useChatSocket(user) {
         ...prev,
         [dmKey]: {
           ...chat,
-          history: [...chat.history, { message_id: Date.now(), from: 'You', message: url, isMine: true, type: 'file_upload' }],
+          history: [...chat.history, { message_id: Date.now(), from: 'You', message: url, isMine: true, type: 'file_upload', timestamp: new Date().toISOString() }],
         },
       }
     })

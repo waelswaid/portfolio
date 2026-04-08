@@ -30,8 +30,16 @@ function FileContent({ url, isMine }) {
   )
 }
 
+function formatTime(timestamp) {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (isNaN(date)) return ''
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function MessageBubble({ message }) {
   const isFile = message.type === 'file_upload'
+  const time = formatTime(message.timestamp)
 
   return (
     <div className={`flex ${message.isMine ? 'justify-end' : 'justify-start'}`}>
@@ -43,6 +51,11 @@ export default function MessageBubble({ message }) {
         }`}
       >
         {isFile ? <FileContent url={message.message} isMine={message.isMine} /> : message.message}
+        {time && (
+          <p className={`text-[10px] mt-1 ${message.isMine ? 'text-blue-200/60' : 'text-slate-400/60'} text-right`}>
+            {time}
+          </p>
+        )}
       </div>
     </div>
   )
