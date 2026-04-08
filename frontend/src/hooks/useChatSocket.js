@@ -131,15 +131,14 @@ export default function useChatSocket(user) {
         } else if (data.type === 'friend_request_received') {
           setPendingReceived((prev) => [...prev, { user_id: data.from_user, email: data.email }])
           emailCache.current[data.from_user] = data.email
+          ws.send(JSON.stringify({ type: 'unread_notifications' }))
         } else if (data.type === 'friend_request_accepted') {
           const friendId = data.user_id || data.from
           if (data.email) emailCache.current[friendId] = data.email
           setFriendsList((prev) => [...prev, { user_id: friendId }])
           setPendingSent((prev) => prev.filter((p) => p.user_id !== friendId))
           setPendingReceived((prev) => prev.filter((p) => p.user_id !== friendId))
-          setNotifications((prev) => prev.filter((n) =>
-            !(n.type === 'friend_request_accepted' && n.payload?.user_id === friendId)
-          ))
+          ws.send(JSON.stringify({ type: 'unread_notifications' }))
         } else if (data.type === 'friend_request_declined') {
           const declinedId = data.user_id || data.from
           setPendingSent((prev) => prev.filter((p) => p.user_id !== declinedId))

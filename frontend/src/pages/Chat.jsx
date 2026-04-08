@@ -90,7 +90,7 @@ export default function Chat() {
   return (
     <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50">
+      <header className="bg-slate-800/80 backdrop-blur-md border-b border-slate-700/50 relative z-10">
         <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link to="/" className="text-sm text-slate-400 hover:text-white transition-colors">
