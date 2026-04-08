@@ -16,8 +16,9 @@ RETRY_DELAYS = [1, 2, 4]
 
 
 class ChatConsumer:
-    def __init__(self, persist_message, group_id="chat-consumers", auto_offset_reset="earliest"):
+    def __init__(self, persist_message, topic="chat-messages", group_id="chat-consumers", auto_offset_reset="earliest"):
         self._persist_message = persist_message
+        self._topic = topic
         self._group_id = group_id
         self._auto_offset_reset = auto_offset_reset
         self._task: asyncio.Task | None = None
@@ -36,7 +37,7 @@ class ChatConsumer:
         while True:
             try:
                 self._consumer = AIOKafkaConsumer(
-                    "chat-messages",
+                    self._topic,
                     bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
                     group_id=self._group_id,
                     auto_offset_reset=self._auto_offset_reset,
@@ -56,11 +57,11 @@ class ChatConsumer:
                                 extract_exc = exc
                                 logger.warning("trace context extraction failed", exc_info=True)
                             try:
-                                with tracer.start_as_current_span("kafka.consume chat-messages", kind=trace.SpanKind.CONSUMER) as span:
+                                with tracer.start_as_current_span(f"kafka.consume {self._topic}", kind=trace.SpanKind.CONSUMER) as span:
                                     if extract_exc is not None:
                                         span.record_exception(extract_exc)
                                     span.set_attribute("messaging.system", "kafka")
-                                    span.set_attribute("messaging.destination", "chat-messages")
+                                    span.set_attribute("messaging.destination", self._topic)
                                     success = await self._handle_message(msg.value)
                                     if not success:
                                         span.set_status(trace.StatusCode.ERROR, "max retries exhausted")
