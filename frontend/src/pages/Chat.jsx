@@ -68,6 +68,10 @@ export default function Chat() {
   const hasMore = chatData?.hasMore ?? true
 
   useEffect(() => {
+    messagesEndRef.current?.scrollIntoView()
+  }, [selectedUser?.user_id])
+
+  useEffect(() => {
     const el = messagesContainerRef.current
     if (!el) return
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
