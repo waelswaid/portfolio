@@ -41,7 +41,7 @@ export default function MessageInput({
           onClick={onVoiceClick}
           disabled={uploading}
           label="Voice"
-          className={recording ? 'bg-red-500/20 text-red-400' : ''}
+          className={recording ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50 animate-pulse' : ''}
         >
           <MicIcon />
         </ActionButton>
@@ -60,7 +60,7 @@ export default function MessageInput({
             onClick={onVoiceClick}
             disabled={uploading}
             label="Voice"
-            className={recording ? 'bg-red-500/20 text-red-400' : ''}
+            className={recording ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50 animate-pulse' : ''}
           >
             <MicIcon />
           </ActionButton>

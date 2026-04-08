@@ -25,7 +25,7 @@ function notificationText(notification, resolveEmail) {
   return { email: 'Unknown', action: 'sent a notification', color: 'text-slate-400' }
 }
 
-export default function NotificationBell({ notifications, onMarkRead, resolveEmail }) {
+export default function NotificationBell({ notifications, onMarkRead, onAcceptRequest, onDeclineRequest, resolveEmail }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -101,7 +101,25 @@ export default function NotificationBell({ notifications, onMarkRead, resolveEma
                       <span className={`font-medium ${color}`}>{email}</span>{' '}
                       {action}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1">{timeAgo(n.created_at)}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-xs text-slate-500">{timeAgo(n.created_at)}</p>
+                      {n.type === 'friend_request_received' && (
+                        <div className="flex gap-1.5">
+                          <button
+                            onClick={() => onAcceptRequest(n.payload.from_user)}
+                            className="text-xs text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-md transition-colors"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => onDeclineRequest(n.payload.from_user)}
+                            className="text-xs text-red-400 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-md transition-colors"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )
               })

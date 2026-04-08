@@ -113,6 +113,8 @@ export default function Chat() {
             <NotificationBell
               notifications={chat.notifications}
               onMarkRead={chat.markNotificationsRead}
+              onAcceptRequest={chat.acceptFriendRequest}
+              onDeclineRequest={chat.declineFriendRequest}
               resolveEmail={chat.resolveEmail}
             />
             <button

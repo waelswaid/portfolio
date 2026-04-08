@@ -1,5 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 
+let audioCtx = null
+function playNotificationSound() {
+  try {
+    if (!audioCtx) audioCtx = new AudioContext()
+    if (audioCtx.state === 'suspended') audioCtx.resume()
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.connect(gain)
+    gain.connect(audioCtx.destination)
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3)
+    osc.start(audioCtx.currentTime)
+    osc.stop(audioCtx.currentTime + 0.3)
+  } catch {}
+}
+
 export default function useChatSocket(user) {
   const [onlineUsers, setOnlineUsers] = useState({})
   const [connectionStatus, setConnectionStatus] = useState('connecting')
@@ -72,6 +89,7 @@ export default function useChatSocket(user) {
           })
           // user left - online status updates via onlineUsers state
         } else if (data.type === 'message') {
+          playNotificationSound()
           const dmKey = getDmKey(data.from_id)
           setMessages((prev) => {
             const chat = prev[dmKey] || { history: [], loadingHistory: false, hasMore: true }
@@ -84,6 +102,7 @@ export default function useChatSocket(user) {
             }
           })
         } else if (data.type === 'file_upload') {
+          playNotificationSound()
           const dmKey = getDmKey(data.from_id)
           setMessages((prev) => {
             const chat = prev[dmKey] || { history: [], loadingHistory: false, hasMore: true }
@@ -129,6 +148,7 @@ export default function useChatSocket(user) {
         } else if (data.type === 'friend_request_sent') {
           setPendingSent((prev) => [...prev, { user_id: data.to }])
         } else if (data.type === 'friend_request_received') {
+          playNotificationSound()
           setPendingReceived((prev) => [...prev, { user_id: data.from_user, email: data.email }])
           emailCache.current[data.from_user] = data.email
           ws.send(JSON.stringify({ type: 'unread_notifications' }))
