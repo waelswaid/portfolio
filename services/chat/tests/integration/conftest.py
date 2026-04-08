@@ -20,11 +20,13 @@ PUBLIC_KEY_PEM = _private_key.public_key().public_bytes(
     serialization.PublicFormat.SubjectPublicKeyInfo,
 ).decode()
 
+PG_HOST = os.environ.get("PG_HOST", "localhost")
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "postgres")
+KAFKA_HOST = os.environ.get("KAFKA_HOST", "localhost")
 
-os.environ["CHAT_DATABASE_URL"] = f"postgresql://postgres:{PG_PASSWORD}@localhost:5432/chat_test"
+os.environ["CHAT_DATABASE_URL"] = f"postgresql://postgres:{PG_PASSWORD}@{PG_HOST}:5432/chat_test"
 os.environ["JWT_PUBLIC_KEY"] = PUBLIC_KEY_PEM
-os.environ["KAFKA_BOOTSTRAP_SERVERS"] = "localhost:9092"
+os.environ["KAFKA_BOOTSTRAP_SERVERS"] = f"{KAFKA_HOST}:9092"
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
 
 # ── now safe to import app code ──
@@ -42,7 +44,7 @@ from models.pending_requests import PendingRequests
 from models.friendships import Friendships
 from main import app
 
-TEST_DB_URL = f"postgresql+asyncpg://postgres:{PG_PASSWORD}@localhost:5432/chat_test"
+TEST_DB_URL = f"postgresql+asyncpg://postgres:{PG_PASSWORD}@{PG_HOST}:5432/chat_test"
 ALL_TABLES = ["messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
 
 # explicit event loop for the test thread (Python 3.14 compatible)
