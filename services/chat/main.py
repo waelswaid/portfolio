@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from routes.chat_websocket import websocket_router
 from contextlib import asynccontextmanager
@@ -17,7 +18,10 @@ init_observability("chat", engine=engine)
 
 chat_service = ChatService(async_session)
 friend_service = FriendService(async_session)
-consumer = ChatConsumer(persist_message=chat_service.persist_message)
+consumer = ChatConsumer(
+    persist_message=chat_service.persist_message,
+    group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "chat-consumers"),
+)
 
 
 @asynccontextmanager

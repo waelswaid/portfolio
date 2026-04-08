@@ -27,6 +27,7 @@ KAFKA_HOST = os.environ.get("KAFKA_HOST", "localhost")
 os.environ["CHAT_DATABASE_URL"] = f"postgresql://postgres:{PG_PASSWORD}@{PG_HOST}:5432/chat_test"
 os.environ["JWT_PUBLIC_KEY"] = PUBLIC_KEY_PEM
 os.environ["KAFKA_BOOTSTRAP_SERVERS"] = f"{KAFKA_HOST}:9092"
+os.environ["KAFKA_CONSUMER_GROUP"] = "chat-test-consumers"
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
 
 # ── now safe to import app code ──
