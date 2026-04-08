@@ -21,6 +21,7 @@ friend_service = FriendService(async_session)
 consumer = ChatConsumer(
     persist_message=chat_service.persist_message,
     group_id=os.environ.get("KAFKA_CONSUMER_GROUP", "chat-consumers"),
+    auto_offset_reset=os.environ.get("KAFKA_AUTO_OFFSET_RESET", "earliest"),
 )
 
 

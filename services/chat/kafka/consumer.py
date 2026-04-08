@@ -16,9 +16,10 @@ RETRY_DELAYS = [1, 2, 4]
 
 
 class ChatConsumer:
-    def __init__(self, persist_message, group_id="chat-consumers"):
+    def __init__(self, persist_message, group_id="chat-consumers", auto_offset_reset="earliest"):
         self._persist_message = persist_message
         self._group_id = group_id
+        self._auto_offset_reset = auto_offset_reset
         self._task: asyncio.Task | None = None
         self._consumer: AIOKafkaConsumer | None = None
 
@@ -38,7 +39,7 @@ class ChatConsumer:
                     "chat-messages",
                     bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
                     group_id=self._group_id,
-                    auto_offset_reset="earliest",
+                    auto_offset_reset=self._auto_offset_reset,
                     enable_auto_commit=False,
                     value_deserializer=lambda v: json.loads(v.decode()),
                 )
