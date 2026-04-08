@@ -8,16 +8,21 @@ export default function useChatSocket(user) {
   const [pendingReceived, setPendingReceived] = useState([])
   const [messages, setMessages] = useState({})
   const [recentChats, setRecentChats] = useState([])
+  const [notifications, setNotifications] = useState([])
   const wsRef = useRef(null)
   const connectionStatusRef = useRef(connectionStatus)
   const emailCache = useRef({})
   const messagesRef = useRef({})
+  const notificationsRef = useRef([])
   useEffect(() => {
     connectionStatusRef.current = connectionStatus
   }, [connectionStatus])
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+  useEffect(() => {
+    notificationsRef.current = notifications
+  }, [notifications])
 
   function getDmKey(otherUserId) {
     const a = user.id, b = otherUserId
@@ -43,6 +48,7 @@ export default function useChatSocket(user) {
         ws.send(JSON.stringify({ type: 'friend_list' }))
         ws.send(JSON.stringify({ type: 'pending_list' }))
         ws.send(JSON.stringify({ type: 'chat_list' }))
+        ws.send(JSON.stringify({ type: 'unread_notifications' }))
       }
 
       ws.onmessage = (event) => {
@@ -131,12 +137,19 @@ export default function useChatSocket(user) {
           setFriendsList((prev) => [...prev, { user_id: friendId }])
           setPendingSent((prev) => prev.filter((p) => p.user_id !== friendId))
           setPendingReceived((prev) => prev.filter((p) => p.user_id !== friendId))
+          setNotifications((prev) => prev.filter((n) =>
+            !(n.type === 'friend_request_accepted' && n.payload?.user_id === friendId)
+          ))
         } else if (data.type === 'friend_request_declined') {
           const declinedId = data.user_id || data.from
           setPendingSent((prev) => prev.filter((p) => p.user_id !== declinedId))
           setPendingReceived((prev) => prev.filter((p) => p.user_id !== declinedId))
         } else if (data.type === 'friend_removed') {
           setFriendsList((prev) => prev.filter((f) => f.user_id !== data.user_id))
+        } else if (data.type === 'unread_notifications') {
+          setNotifications(data.notifications ?? [])
+        } else if (data.type === 'marked_read') {
+          // already removed optimistically in markNotificationsRead
         } else if (data.type?.endsWith('_error')) {
           console.error(`[${data.type}]`, data.message)
         }
@@ -217,10 +230,22 @@ export default function useChatSocket(user) {
 
   function acceptFriendRequest(userId) {
     wsRef.current?.send(JSON.stringify({ type: 'friend_accept', from_user: userId }))
+    const matchingIds = notificationsRef.current
+      .filter((n) => n.type === 'friend_request_received' && n.payload?.from_user === userId)
+      .map((n) => n.id)
+    if (matchingIds.length > 0) {
+      markNotificationsRead(matchingIds)
+    }
   }
 
   function declineFriendRequest(userId) {
     wsRef.current?.send(JSON.stringify({ type: 'friend_decline', from_user: userId }))
+    const matchingIds = notificationsRef.current
+      .filter((n) => n.type === 'friend_request_received' && n.payload?.from_user === userId)
+      .map((n) => n.id)
+    if (matchingIds.length > 0) {
+      markNotificationsRead(matchingIds)
+    }
   }
 
   function removeFriend(userId) {
@@ -250,6 +275,11 @@ export default function useChatSocket(user) {
     })
   }
 
+  function markNotificationsRead(ids) {
+    setNotifications((prev) => prev.filter((n) => !ids.includes(n.id)))
+    wsRef.current?.send(JSON.stringify({ type: 'mark_read', notification_ids: ids }))
+  }
+
   function close() {
     wsRef.current?.close()
   }
@@ -262,6 +292,7 @@ export default function useChatSocket(user) {
     pendingReceived,
     messages,
     recentChats,
+    notifications,
     wsRef,
     sendMessage,
     sendFileMessage,
@@ -271,6 +302,7 @@ export default function useChatSocket(user) {
     acceptFriendRequest,
     declineFriendRequest,
     removeFriend,
+    markNotificationsRead,
     resolveEmail,
     waitForConnection,
     close,

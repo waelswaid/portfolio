@@ -7,6 +7,7 @@ from fastapi import WebSocket
 class Deps:
     chat_service: object
     friend_service: object
+    notification_service: object
     producer: object
     manager: object
 

@@ -7,10 +7,14 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 
-# helper function that sends the response back to the caller, sends the notify back to the other user
+# helper function that sends the response back to the caller, persists and sends the notify to the other user
 async def _send_result(ctx: RequestContext, result: dict) -> None:
     await ctx.websocket.send_json(result["response"])
     for target_id, payload in result.get("notify", []):
+        try:
+            await ctx.deps.notification_service.create(target_id, payload["type"], payload)
+        except Exception as exc:
+            logger.error("notification persist failed for user %s: %s", target_id, exc)
         ws = ctx.deps.manager.get_connection(target_id)
         if ws:
             try:

@@ -38,7 +38,7 @@ from starlette.testclient import TestClient
 from main import app
 
 PG_DSN = f"host={PG_HOST} port=5432 dbname=chat_test user=postgres password={PG_PASSWORD}"
-ALL_TABLES = ["messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
+ALL_TABLES = ["notifications", "messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
 
 
 def query_db(sql, params=None):

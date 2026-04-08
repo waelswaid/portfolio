@@ -6,6 +6,7 @@ import useChatSocket from '../hooks/useChatSocket'
 import useFileUpload from '../hooks/useFileUpload'
 import useVoiceRecorder from '../hooks/useVoiceRecorder'
 import ChatSidebar from '../components/chat/ChatSidebar'
+import NotificationBell from '../components/chat/NotificationBell'
 import ChatHeader from '../components/chat/ChatHeader'
 import MessageBubble from '../components/chat/MessageBubble'
 import MessageInput from '../components/chat/MessageInput'
@@ -108,12 +109,19 @@ export default function Chat() {
               {chat.connectionStatus}
             </span>
           </div>
-          <button
-            onClick={() => { chat.close(); logout() }}
-            className="text-sm text-slate-400 hover:text-red-400 transition-colors"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell
+              notifications={chat.notifications}
+              onMarkRead={chat.markNotificationsRead}
+              resolveEmail={chat.resolveEmail}
+            />
+            <button
+              onClick={() => { chat.close(); logout() }}
+              className="text-sm text-slate-400 hover:text-red-400 transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 

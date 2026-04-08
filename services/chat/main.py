@@ -11,13 +11,16 @@ from shared.health import check_postgres, check_kafka, build_health_response
 from core.config import settings
 from services.chat_service import ChatService
 from services.friend_service import FriendService
+from services.notification_service import NotificationService
 import dispatch.handlers.chat_handlers  # noqa: F401 — register handlers
 import dispatch.handlers.friend_handlers  # noqa: F401 — register handlers
+import dispatch.handlers.notification_handlers  # noqa: F401 — register handlers
 
 init_observability("chat", engine=engine)
 
 chat_service = ChatService(async_session)
 friend_service = FriendService(async_session)
+notification_service = NotificationService(async_session)
 consumer = ChatConsumer(
     persist_message=chat_service.persist_message,
     topic=os.environ.get("KAFKA_TOPIC", "chat-messages"),
@@ -30,6 +33,7 @@ consumer = ChatConsumer(
 async def lifespan(app: FastAPI):
     app.state.chat_service = chat_service
     app.state.friend_service = friend_service
+    app.state.notification_service = notification_service
     app.state.producer = producer
     app.state.manager = manager
     await producer.start()

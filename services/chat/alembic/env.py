@@ -31,6 +31,7 @@ from models.friendships import Friendships
 from models.chats import Chat
 from models.chat_members import ChatMember
 from models.messages import Message
+from models.notifications import Notification
 
 target_metadata = Base.metadata
 

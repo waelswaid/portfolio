@@ -10,6 +10,7 @@ from models.chat_members import ChatMember
 from models.messages import Message
 from models.pending_requests import PendingRequests
 from models.friendships import Friendships
+from models.notifications import Notification
 
 import os
 
@@ -17,7 +18,7 @@ PG_HOST = os.environ.get("PG_HOST", "localhost")
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "postgres")
 TEST_DB_URL = f"postgresql+asyncpg://postgres:{PG_PASSWORD}@{PG_HOST}:5432/chat_test"
 
-ALL_TABLES = ["messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
+ALL_TABLES = ["notifications", "messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
 
 
 @pytest.fixture

@@ -47,7 +47,6 @@ class FriendService:
                 return {"response": {"type": "friend_req_decline_error", "message": "invalid request"}}
         return {
             "response": {"type": "friend_request_declined", "from": requester_id},
-            "notify": [(requester_id, {"type": "friend_request_declined", "user_id": decliner_id})],
         }
 
     async def friend_remove(self, removed_id: str, remover_id: str) -> dict:
@@ -60,7 +59,6 @@ class FriendService:
                 return {"response": {"type": "friend_remove_error", "message": "invalid request"}}
         return {
             "response": {"type": "friend_removed", "user_id": removed_id},
-            "notify": [(removed_id, {"type": "friend_removed", "user_id": remover_id})],
         }
 
     async def return_friend_list(self, user_id: str) -> dict:
