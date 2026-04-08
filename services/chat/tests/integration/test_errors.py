@@ -3,6 +3,7 @@ def test_unknown_message_type(client, make_token):
     token = make_token("alice", "alice@test.com")
     with client.websocket_connect(f"/server/ws/?token={token}") as ws:
         ws.receive_json()  # user_list
+        ws.receive_json()  # user_joined (self)
 
         ws.send_json({"type": "nonexistent_type"})
         msg = ws.receive_json()
@@ -20,6 +21,7 @@ def test_invalid_message_payload(client, make_token):
     token = make_token("alice", "alice@test.com")
     with client.websocket_connect(f"/server/ws/?token={token}") as ws:
         ws.receive_json()  # user_list
+        ws.receive_json()  # user_joined (self)
 
         # message handler expects 'to' and 'message' fields
         ws.send_json({"type": "message"})

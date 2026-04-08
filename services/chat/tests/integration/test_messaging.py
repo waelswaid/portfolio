@@ -11,9 +11,11 @@ def test_send_message_both_online(client, make_token, test_session_factory):
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             alice_ws.send_json({"type": "message", "to": "bob", "message": "hello bob"})
@@ -41,9 +43,11 @@ def test_send_message_recipient_offline(client, make_token, test_session_factory
     # bob connects first so his User row exists, then disconnects
     with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
         bob_ws.receive_json()  # user_list
+        bob_ws.receive_json()  # user_joined (self)
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         # bob is disconnected — send a message anyway
         alice_ws.send_json({"type": "message", "to": "bob", "message": "are you there?"})
@@ -68,9 +72,11 @@ def test_load_history(client, make_token, test_session_factory):
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             # send a few messages
@@ -103,9 +109,11 @@ def test_file_upload(client, make_token):
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             alice_ws.send_json({"type": "file_upload", "to": "bob", "url": "https://cdn.example.com/pic.png"})

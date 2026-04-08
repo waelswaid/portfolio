@@ -19,9 +19,11 @@ def test_friend_request_and_notification(client, make_token, test_session_factor
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             alice_ws.send_json({"type": "friend_request", "to": "bob"})
@@ -47,9 +49,11 @@ def test_friend_accept(client, make_token, test_session_factory):
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             # alice sends friend request
@@ -81,9 +85,11 @@ def test_friend_remove(client, make_token, test_session_factory):
 
     with client.websocket_connect(f"/server/ws/?token={alice_token}") as alice_ws:
         alice_ws.receive_json()  # user_list
+        alice_ws.receive_json()  # user_joined (self)
 
         with client.websocket_connect(f"/server/ws/?token={bob_token}") as bob_ws:
             bob_ws.receive_json()  # user_list
+            bob_ws.receive_json()  # user_joined (self)
             alice_ws.receive_json()  # user_joined for bob
 
             # become friends first
