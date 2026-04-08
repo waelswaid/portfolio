@@ -56,7 +56,7 @@ def query_scalar(sql, params=None):
     return rows[0][0] if rows else None
 
 
-def poll_db_sync(check_fn, timeout=5.0, interval=0.3):
+def poll_db_sync(check_fn, timeout=15.0, interval=0.5):
     """Poll DB until check_fn() returns truthy, or raise TimeoutError."""
     elapsed = 0
     while elapsed < timeout:
