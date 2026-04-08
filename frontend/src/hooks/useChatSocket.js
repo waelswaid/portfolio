@@ -227,10 +227,11 @@ export default function useChatSocket(user) {
     })
   }
 
-  function loadHistory(otherUserId) {
+  function loadHistory(otherUserId, force = false) {
     const dmKey = getDmKey(otherUserId)
     const chat = messagesRef.current[dmKey]
     if (chat?.loadingHistory) return
+    if (!force && chat?.history?.length > 0) return
 
     const payload = { type: 'load_history', dm_key: dmKey }
     const oldestId = chat?.history?.[0]?.message_id

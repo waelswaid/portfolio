@@ -52,10 +52,13 @@ export default function Chat() {
     fileUpload.uploadBlob(blob, filename)
   })
 
+  const prevStatusRef = useRef(chat.connectionStatus)
   useEffect(() => {
     if (selectedUser && chat.connectionStatus === 'connected') {
-      chat.loadHistory(selectedUser.user_id)
+      const reconnected = prevStatusRef.current === 'disconnected'
+      chat.loadHistory(selectedUser.user_id, reconnected)
     }
+    prevStatusRef.current = chat.connectionStatus
   }, [selectedUser, chat.connectionStatus])
 
   const dmKey = selectedUser ? chat.getDmKey(selectedUser.user_id) : null
@@ -95,7 +98,7 @@ export default function Chat() {
   function handleScroll() {
     const el = messagesContainerRef.current
     if (el.scrollTop === 0 && hasMore && !isLoadingHistory && selectedUser) {
-      chat.loadHistory(selectedUser.user_id)
+      chat.loadHistory(selectedUser.user_id, true)
     }
   }
 
