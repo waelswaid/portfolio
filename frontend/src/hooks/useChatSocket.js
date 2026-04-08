@@ -126,10 +126,12 @@ export default function useChatSocket(user) {
           }))
           setMessages((prev) => {
             const chat = prev[dmKey] || { history: [], loadingHistory: false, hasMore: true }
+            const existingIds = new Set(chat.history.map((m) => m.message_id))
+            const deduped = incoming.filter((m) => !existingIds.has(m.message_id))
             return {
               ...prev,
               [dmKey]: {
-                history: [...incoming, ...chat.history],
+                history: [...deduped, ...chat.history],
                 loadingHistory: false,
                 hasMore: incoming.length >= 10,
               },
