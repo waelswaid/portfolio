@@ -1,19 +1,8 @@
-from sqlalchemy import select, func
-from models.pending_requests import PendingRequests
-from models.friendships import Friendships
-from tests.integration.conftest import run_async
-
-
-def _query_count(session_factory, model):
-    """Helper to synchronously query a row count."""
-    async def _run():
-        async with session_factory() as session:
-            return (await session.execute(select(func.count()).select_from(model))).scalar()
-    return run_async(_run())
+from tests.integration.conftest import query_scalar
 
 
 # alice sends friend request → bob gets real-time notification, pending row exists in DB
-def test_friend_request_and_notification(client, make_token, test_session_factory):
+def test_friend_request_and_notification(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -39,11 +28,11 @@ def test_friend_request_and_notification(client, make_token, test_session_factor
             assert bob_msg["from_user"] == "alice"
 
     # pending request exists in DB
-    assert _query_count(test_session_factory, PendingRequests) == 1
+    assert query_scalar("SELECT COUNT(*) FROM pending_requests") == 1
 
 
 # bob accepts alice's friend request → friendship created, pending removed
-def test_friend_accept(client, make_token, test_session_factory):
+def test_friend_accept(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -74,12 +63,12 @@ def test_friend_accept(client, make_token, test_session_factory):
             assert alice_msg["user_id"] == "bob"
 
     # friendship created, pending removed
-    assert _query_count(test_session_factory, PendingRequests) == 0
-    assert _query_count(test_session_factory, Friendships) == 2
+    assert query_scalar("SELECT COUNT(*) FROM pending_requests") == 0
+    assert query_scalar("SELECT COUNT(*) FROM friendships") == 2
 
 
 # alice removes bob as friend → friendship rows deleted
-def test_friend_remove(client, make_token, test_session_factory):
+def test_friend_remove(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -107,4 +96,4 @@ def test_friend_remove(client, make_token, test_session_factory):
             assert alice_msg["type"] == "friend_removed"
 
     # friendship gone
-    assert _query_count(test_session_factory, Friendships) == 0
+    assert query_scalar("SELECT COUNT(*) FROM friendships") == 0

@@ -1,11 +1,9 @@
-from sqlalchemy import select, func
-from models.messages import Message
 from services.chat_service import generate_dm_key
-from tests.integration.conftest import poll_db, run_async
+from tests.integration.conftest import query_scalar, poll_db_sync
 
 
 # alice sends message to bob → bob receives it in real-time, message persisted in DB
-def test_send_message_both_online(client, make_token, test_session_factory):
+def test_send_message_both_online(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -28,15 +26,11 @@ def test_send_message_both_online(client, make_token, test_session_factory):
             assert msg["from"] == "alice@test.com"
 
     # message persisted in DB via Kafka (may take a moment)
-    async def check(session):
-        count = (await session.execute(select(func.count()).select_from(Message))).scalar()
-        return count > 0
-
-    run_async(poll_db(test_session_factory, check))
+    poll_db_sync(lambda: query_scalar("SELECT COUNT(*) FROM messages") > 0)
 
 
 # alice sends message when bob is disconnected → message persisted, no crash
-def test_send_message_recipient_offline(client, make_token, test_session_factory):
+def test_send_message_recipient_offline(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -58,15 +52,11 @@ def test_send_message_recipient_offline(client, make_token, test_session_factory
         assert msg["type"] == "chat_list"
 
     # message still persisted via Kafka
-    async def check(session):
-        count = (await session.execute(select(func.count()).select_from(Message))).scalar()
-        return count > 0
-
-    run_async(poll_db(test_session_factory, check))
+    poll_db_sync(lambda: query_scalar("SELECT COUNT(*) FROM messages") > 0)
 
 
 # alice sends messages, then loads history → correct messages returned in order
-def test_load_history(client, make_token, test_session_factory):
+def test_load_history(client, make_token):
     alice_token = make_token("alice", "alice@test.com")
     bob_token = make_token("bob", "bob@test.com")
 
@@ -85,11 +75,7 @@ def test_load_history(client, make_token, test_session_factory):
                 bob_ws.receive_json()  # bob receives each message
 
             # wait for Kafka consumer to persist
-            async def check(session):
-                count = (await session.execute(select(func.count()).select_from(Message))).scalar()
-                return count >= 3
-
-            run_async(poll_db(test_session_factory, check))
+            poll_db_sync(lambda: (query_scalar("SELECT COUNT(*) FROM messages") or 0) >= 3)
 
             # load history
             dm_key = generate_dm_key("alice", "bob")

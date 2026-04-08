@@ -1,7 +1,7 @@
 import os
 import time
-import asyncio
 import jwt as pyjwt
+import psycopg2
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
@@ -33,27 +33,39 @@ os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
 
 import pytest
 from starlette.testclient import TestClient
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy import text
-from models.base import Base
-from models.users import User
-from models.chats import Chat
-from models.chat_members import ChatMember
-from models.messages import Message
-from models.pending_requests import PendingRequests
-from models.friendships import Friendships
 from main import app
 
-TEST_DB_URL = f"postgresql+asyncpg://postgres:{PG_PASSWORD}@{PG_HOST}:5432/chat_test"
+PG_DSN = f"host={PG_HOST} port=5432 dbname=chat_test user=postgres password={PG_PASSWORD}"
 ALL_TABLES = ["messages", "chat_members", "chats", "friendships", "pending_requests", "users"]
 
-# explicit event loop for the test thread (Python 3.14 compatible)
-_loop = asyncio.new_event_loop()
+
+def query_db(sql, params=None):
+    """Run a synchronous SQL query and return all rows."""
+    conn = psycopg2.connect(PG_DSN)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
 
 
-def run_async(coro):
-    """Run an async coroutine on the test thread's event loop."""
-    return _loop.run_until_complete(coro)
+def query_scalar(sql, params=None):
+    """Run a synchronous SQL query and return a single value."""
+    rows = query_db(sql, params)
+    return rows[0][0] if rows else None
+
+
+def poll_db_sync(check_fn, timeout=5.0, interval=0.3):
+    """Poll DB until check_fn() returns truthy, or raise TimeoutError."""
+    elapsed = 0
+    while elapsed < timeout:
+        result = check_fn()
+        if result:
+            return result
+        time.sleep(interval)
+        elapsed += interval
+    raise TimeoutError("DB condition not met within timeout")
 
 
 # ── session-scoped test client (starts Kafka producer/consumer once) ──
@@ -77,34 +89,18 @@ def make_token():
     return _make
 
 
-# ── DB session factory for test-side verification ──
-
-@pytest.fixture(scope="session")
-def test_session_factory():
-    eng = create_async_engine(TEST_DB_URL, echo=False)
-
-    async def _setup():
-        async with eng.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-    run_async(_setup())
-    factory = async_sessionmaker(eng, expire_on_commit=False)
-    yield factory
-    run_async(eng.dispose())
-
-
 # ── cleanup between tests ──
 
 @pytest.fixture(autouse=True)
-def cleanup_db(test_session_factory):
+def cleanup_db():
     yield
-
-    async def _truncate():
-        async with test_session_factory() as session:
-            await session.execute(text(f"TRUNCATE {', '.join(ALL_TABLES)} CASCADE"))
-            await session.commit()
-
-    run_async(_truncate())
+    conn = psycopg2.connect(PG_DSN)
+    try:
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute(f"TRUNCATE {', '.join(ALL_TABLES)} CASCADE")
+    finally:
+        conn.close()
 
 
 @pytest.fixture(autouse=True)
@@ -116,18 +112,3 @@ def cleanup_manager():
     manager.cancel_all_pending()
     manager.active_connections.clear()
     manager.pending_disconnects.clear()
-
-
-# ── helper: poll DB for async Kafka persistence ──
-
-async def poll_db(session_factory, query_fn, timeout=5.0, interval=0.3):
-    """Poll DB until query_fn(session) returns truthy, or raise TimeoutError."""
-    elapsed = 0
-    while elapsed < timeout:
-        async with session_factory() as session:
-            result = await query_fn(session)
-            if result:
-                return result
-        await asyncio.sleep(interval)
-        elapsed += interval
-    raise TimeoutError("DB condition not met within timeout")
